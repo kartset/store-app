@@ -10,11 +10,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # Copy dependency files
 COPY backend/pyproject.toml backend/uv.lock ./
 
-# Install dependencies
-RUN uv sync --frozen
+# Install dependencies without installing the project itself
+RUN uv sync --frozen --no-install-project
 
 # Copy the rest of the backend source
 COPY backend/ ./
+
+# Install the project
+RUN uv sync --frozen
 
 # Run server
 EXPOSE 8000
