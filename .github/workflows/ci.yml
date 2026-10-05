@@ -25,7 +25,7 @@ jobs:
       - name: Type Check
         run: yarn tsc -b
       - name: Lint
-        run: yarn eslint .
+        run: yarn run lint
       - name: Build
         run: yarn build
 
