@@ -1,0 +1,22 @@
+.agents
+genai-exec-platform-ai-sdlc
+
+node_modules/
+dist/
+build/
+# Compiled ARM templates (generated from Bicep)
+infra/landing-zone/governance.json
+
+# Temp build artifacts
+bicep_*.txt
+*.code-workspace
+*.log
+# Local environment files
+.env
+.env.local
+.env.*.local
+# VS Code settings
+.vscode/
+.vscode/*
+
+cdp-sdlc.code-workspace
