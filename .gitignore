@@ -1,4 +1,5 @@
 .agents
+WORKSPACE-SETUP.md
 genai-exec-platform-ai-sdlc
 
 node_modules/
