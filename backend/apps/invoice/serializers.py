@@ -1,17 +1,18 @@
 from rest_framework import serializers
+from utils.serializers import BaseModelSerializer
 from db.models import Invoice, InvoiceItem, Payment
 
-class InvoiceSerializer(serializers.ModelSerializer):
+class InvoiceSerializer(BaseModelSerializer):
     class Meta:
         model = Invoice
         fields = '__all__'
 
-class InvoiceItemSerializer(serializers.ModelSerializer):
+class InvoiceItemSerializer(BaseModelSerializer):
     class Meta:
         model = InvoiceItem
         fields = '__all__'
 
-class PaymentSerializer(serializers.ModelSerializer):
+class PaymentSerializer(BaseModelSerializer):
     class Meta:
         model = Payment
         fields = '__all__'
