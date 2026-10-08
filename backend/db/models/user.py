@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from utils.models import BaseModel
 
@@ -13,16 +13,27 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-class User(BaseModel, AbstractBaseUser):
+    def create_superuser(self, email, password=None, **extra_fields):
+        """
+        Create and save a SuperUser with the given email and password.
+        """
+        extra_fields.setdefault("is_active", True)
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        
+        return self.create_user(email, password, **extra_fields)
+
+class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     """
-    Custom User model. Inherits from BaseModel (UUID, soft delete) 
-    and AbstractBaseUser (authentication, password hashing).
-    Does NOT include Django admin fields like is_staff or is_superuser.
+    Custom User model. Inherits from BaseModel (UUID, soft delete),
+    AbstractBaseUser (authentication, password hashing),
+    and PermissionsMixin (Django admin support).
     """
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
     is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
 
     objects = UserManager()
 
