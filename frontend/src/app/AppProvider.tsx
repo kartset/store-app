@@ -1,6 +1,6 @@
 import { MantineProvider, createTheme } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import React, { ReactNode, useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 // Import Mantine core styles
 import '@mantine/core/styles.css';
