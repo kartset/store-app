@@ -17,6 +17,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   IconBuildingSkyscraper,
   IconBuildingStore,
+  IconPackage,
   IconLogout,
   IconSparkles,
 } from '@tabler/icons-react';
@@ -216,6 +217,23 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/stores')}
               active={location.pathname === '/stores'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Products"
+              description="Master catalog & barcodes"
+              leftSection={
+                <ThemeIcon size={28} radius="md" color={location.pathname === '/products' ? 'brand' : 'gray'} variant={location.pathname === '/products' ? 'filled' : 'light'}>
+                  <IconPackage size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/products')}
+              active={location.pathname === '/products'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
