@@ -2,8 +2,8 @@ from django.contrib import admin
 
 from .models import (
     Brand,
-    Category,
     CatalogueItem,
+    Category,
     Customer,
     Delivery,
     Inventory,
@@ -12,9 +12,11 @@ from .models import (
     Order,
     OrderItem,
     Organization,
+    OrganizationCategory,
     Payment,
     Product,
     Store,
+    StoreCategory,
     StoreCustomer,
     StoreStaff,
     User,
@@ -63,9 +65,23 @@ class StoreAdmin(BaseModelAdmin):
 
 @admin.register(Category)
 class CategoryAdmin(BaseModelAdmin):
-    list_display = ('name', 'parent_id', 'organization_id', 'slug', 'is_active', 'created_at')
-    list_filter = ('organization_id', 'is_active', 'is_deleted')
-    search_fields = ('name', 'slug', 'organization_id__name')
+    list_display = ('name', 'parent_id', 'slug', 'default_hsn_code', 'default_tax_slab', 'is_active', 'created_at')
+    list_filter = ('is_active', 'is_deleted')
+    search_fields = ('name', 'slug', 'default_hsn_code')
+
+
+@admin.register(OrganizationCategory)
+class OrganizationCategoryAdmin(BaseModelAdmin):
+    list_display = ('organization_id', 'category_id', 'is_active', 'created_at')
+    list_filter = ('organization_id', 'category_id', 'is_active', 'is_deleted')
+    search_fields = ('organization_id__name', 'category_id__name')
+
+
+@admin.register(StoreCategory)
+class StoreCategoryAdmin(BaseModelAdmin):
+    list_display = ('store_id', 'category_id', 'is_active', 'created_at')
+    list_filter = ('store_id', 'category_id', 'is_active', 'is_deleted')
+    search_fields = ('store_id__name', 'category_id__name')
 
 
 @admin.register(Brand)
