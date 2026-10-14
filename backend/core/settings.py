@@ -131,7 +131,11 @@ MAILERS = {
     },
 }
 
-AUTH_USER_MODEL = "db.User"
+# Authentication Backends
+AUTHENTICATION_BACKENDS = [
+    'apps.user.auth.AppUserBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 # CORS Config
 CORS_ALLOWED_ORIGINS = [
@@ -142,6 +146,6 @@ CORS_ALLOWED_ORIGINS = [
 # DRF Config
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.user.auth.AppJWTAuthentication',
     )
 }

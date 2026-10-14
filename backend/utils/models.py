@@ -17,21 +17,21 @@ class BaseModel(models.Model):
     
     # Audit tracking (Requires middleware to set these automatically, or set manually)
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        'db.User',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="%(class)s_created"
     )
     updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        'db.User',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="%(class)s_updated"
     )
     deleted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        'db.User',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

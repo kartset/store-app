@@ -8,7 +8,7 @@ class StoreStaff(BaseModel):
         ('MANAGER', 'Manager'),
         ('CASHIER', 'Cashier'),
     )
-    user_id = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='staff_roles')
+    user_id = models.ForeignKey('db.User', on_delete=models.CASCADE, related_name='staff_roles')
     store_id = models.ForeignKey('db.Store', on_delete=models.CASCADE, related_name='staff_members')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='CASHIER')
 
