@@ -21,3 +21,4 @@ bicep_*.txt
 .vscode/*
 
 cdp-sdlc.code-workspace
+.DS_Store
