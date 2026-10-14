@@ -23,3 +23,8 @@ dependencies = [
 dev = [
     "ruff>=0.16.10",
 ]
+
+[tool.ruff.lint]
+ignore = [
+    "RUF012",  # Mutable class attributes in Django Meta and Serializers
+]

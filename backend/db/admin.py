@@ -1,7 +1,9 @@
 from django.contrib import admin
 
 from .models import (
+    Brand,
     CatalogueItem,
+    Category,
     Customer,
     Delivery,
     Inventory,
@@ -10,9 +12,11 @@ from .models import (
     Order,
     OrderItem,
     Organization,
+    OrganizationCategory,
     Payment,
     Product,
     Store,
+    StoreCategory,
     StoreCustomer,
     StoreStaff,
     User,
@@ -59,6 +63,34 @@ class StoreAdmin(BaseModelAdmin):
     search_fields = ('name', 'gst_number', 'organization_id__name')
 
 
+@admin.register(Category)
+class CategoryAdmin(BaseModelAdmin):
+    list_display = ('name', 'parent_id', 'slug', 'default_hsn_code', 'default_tax_slab', 'is_active', 'created_at')
+    list_filter = ('is_active', 'is_deleted')
+    search_fields = ('name', 'slug', 'default_hsn_code')
+
+
+@admin.register(OrganizationCategory)
+class OrganizationCategoryAdmin(BaseModelAdmin):
+    list_display = ('organization_id', 'category_id', 'is_active', 'created_at')
+    list_filter = ('organization_id', 'category_id', 'is_active', 'is_deleted')
+    search_fields = ('organization_id__name', 'category_id__name')
+
+
+@admin.register(StoreCategory)
+class StoreCategoryAdmin(BaseModelAdmin):
+    list_display = ('store_id', 'category_id', 'is_active', 'created_at')
+    list_filter = ('store_id', 'category_id', 'is_active', 'is_deleted')
+    search_fields = ('store_id__name', 'category_id__name')
+
+
+@admin.register(Brand)
+class BrandAdmin(BaseModelAdmin):
+    list_display = ('name', 'organization_id', 'is_active', 'created_at')
+    list_filter = ('organization_id', 'is_active', 'is_deleted')
+    search_fields = ('name', 'organization_id__name')
+
+
 @admin.register(CatalogueItem)
 class CatalogueItemAdmin(BaseModelAdmin):
     list_display = ('name', 'sku', 'hsn_code', 'created_at')
@@ -68,9 +100,22 @@ class CatalogueItemAdmin(BaseModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(BaseModelAdmin):
-    list_display = ('name', 'organization_id', 'sku', 'base_mrp', 'hsn_code')
-    search_fields = ('name', 'sku', 'organization_id__name')
-    list_filter = ('organization_id', 'is_deleted')
+    list_display = (
+        'name',
+        'organization_id',
+        'sku',
+        'barcode',
+        'internal_barcode',
+        'category_id',
+        'brand_id',
+        'base_mrp',
+        'cost_price',
+        'tax_slab',
+        'uom',
+        'is_active',
+    )
+    search_fields = ('name', 'sku', 'barcode', 'internal_barcode', 'hsn_code', 'organization_id__name')
+    list_filter = ('organization_id', 'category_id', 'brand_id', 'tax_slab', 'uom', 'is_active', 'is_deleted')
 
 
 @admin.register(Inventory)
