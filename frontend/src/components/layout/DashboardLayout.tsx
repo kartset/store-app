@@ -1,12 +1,50 @@
-import { AppShell, Burger, Group, NavLink, Title, Button } from '@mantine/core';
+import {
+  AppShell,
+  Burger,
+  Group,
+  NavLink,
+  Title,
+  Button,
+  Box,
+  Text,
+  Avatar,
+  Badge,
+  ThemeIcon,
+  Stack,
+} from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { IconBuildingSkyscraper, IconBuildingStore, IconLogout } from '@tabler/icons-react';
+import {
+  IconBuildingSkyscraper,
+  IconBuildingStore,
+  IconLogout,
+  IconSparkles,
+} from '@tabler/icons-react';
+import { useMemo } from 'react';
 
 export function DashboardLayout() {
   const [opened, { toggle }] = useDisclosure();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Retrieve authenticated user and active store from localStorage
+  const user = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const currentStore = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('current_store');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -16,41 +54,203 @@ export function DashboardLayout() {
     navigate('/login');
   };
 
+  const userInitials = useMemo(() => {
+    if (!user) return 'ST';
+    const first = user.first_name?.[0] || '';
+    const last = user.last_name?.[0] || '';
+    return (first + last).toUpperCase() || user.email?.[0]?.toUpperCase() || 'ST';
+  }, [user]);
+
   return (
     <AppShell
-      header={{ height: 60 }}
-      navbar={{ width: 250, breakpoint: 'sm', collapsed: { mobile: !opened } }}
-      padding="md"
+      header={{ height: 68 }}
+      navbar={{
+        width: 270,
+        breakpoint: 'sm',
+        collapsed: { mobile: !opened },
+      }}
+      padding="xl"
+      styles={{
+        main: {
+          backgroundColor: 'var(--bg-page)',
+          minHeight: 'calc(100vh - 68px)',
+        },
+      }}
     >
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group>
+      {/* Top Header */}
+      <AppShell.Header
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderBottom: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-xs)',
+          zIndex: 100,
+        }}
+      >
+        <Group h="100%" px="xl" justify="space-between">
+          {/* Brand mark & Mobile Toggle */}
+          <Group gap="md">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
-            <Title order={3}>Store Admin</Title>
+            <Group gap="xs" style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+              <ThemeIcon
+                size={36}
+                radius="md"
+                style={{
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                }}
+              >
+                <IconBuildingStore size={20} color="#fff" />
+              </ThemeIcon>
+              <div>
+                <Title order={3} fw={800} style={{ letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+                  Store<span style={{ color: 'var(--brand-primary)' }}>Craft</span>
+                </Title>
+                <Text size="10px" c="dimmed" fw={600} style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Retail Ops
+                </Text>
+              </div>
+            </Group>
           </Group>
-          <Button variant="subtle" color="red" leftSection={<IconLogout size={16} />} onClick={handleLogout}>
-            Logout
-          </Button>
+
+          {/* Active Store Indicator & User Profile */}
+          <Group gap="md">
+            {currentStore && (
+              <Badge
+                variant="light"
+                color="brand"
+                size="lg"
+                radius="md"
+                leftSection={<span className="pulse-dot" />}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <Text component="span" fw={700} size="xs" c="var(--brand-primary)">
+                  {currentStore.name}
+                </Text>
+                {currentStore.role && (
+                  <Text component="span" size="10px" fw={600} c="dimmed" ml={6}>
+                    ({currentStore.role})
+                  </Text>
+                )}
+              </Badge>
+            )}
+
+            {/* User Profile Pill */}
+            <Group gap="xs" style={{ paddingLeft: '8px', borderLeft: '1px solid var(--border-subtle)' }}>
+              <Avatar
+                radius="xl"
+                size={34}
+                color="brand"
+                style={{
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  boxShadow: 'var(--shadow-xs)',
+                }}
+              >
+                {userInitials}
+              </Avatar>
+              <Box visibleFrom="xs">
+                <Text size="xs" fw={700} lh={1.2}>
+                  {user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user?.email || 'Store Staff'}
+                </Text>
+                <Text size="10px" c="dimmed" lh={1.2}>
+                  {user?.email || 'Verified Staff'}
+                </Text>
+              </Box>
+            </Group>
+
+            {/* Logout Button */}
+            <Button
+              variant="subtle"
+              color="red"
+              size="sm"
+              leftSection={<IconLogout size={16} />}
+              onClick={handleLogout}
+              style={{ fontWeight: 600 }}
+            >
+              Sign out
+            </Button>
+          </Group>
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p="md">
-        <NavLink
-          label="Organizations"
-          leftSection={<IconBuildingSkyscraper size="1rem" stroke={1.5} />}
-          onClick={() => navigate('/organizations')}
-          active={location.pathname === '/organizations'}
-        />
-        <NavLink
-          label="Stores"
-          leftSection={<IconBuildingStore size="1rem" stroke={1.5} />}
-          onClick={() => navigate('/stores')}
-          active={location.pathname === '/stores'}
-        />
+      {/* Modern Sidebar Navigation */}
+      <AppShell.Navbar
+        p="md"
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderRight: '1px solid var(--border-subtle)',
+        }}
+      >
+        <Box style={{ flex: 1 }}>
+          <Text size="11px" fw={700} c="dimmed" px="xs" mb="xs" style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Domain Navigation
+          </Text>
+
+          <Stack gap={4}>
+            <NavLink
+              label="Organizations"
+              description="Tenants & franchises"
+              leftSection={
+                <ThemeIcon size={28} radius="md" color={location.pathname === '/organizations' ? 'brand' : 'gray'} variant={location.pathname === '/organizations' ? 'filled' : 'light'}>
+                  <IconBuildingSkyscraper size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/organizations')}
+              active={location.pathname === '/organizations'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Stores"
+              description="Retail branches & registers"
+              leftSection={
+                <ThemeIcon size={28} radius="md" color={location.pathname === '/stores' ? 'brand' : 'gray'} variant={location.pathname === '/stores' ? 'filled' : 'light'}>
+                  <IconBuildingStore size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/stores')}
+              active={location.pathname === '/stores'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+          </Stack>
+        </Box>
+
+        {/* Sidebar Footer Info */}
+        <Box
+          p="sm"
+          style={{
+            backgroundColor: 'var(--bg-surface-subtle)',
+            borderRadius: '10px',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          <Group gap="xs" mb={4}>
+            <IconSparkles size={14} color="var(--brand-primary)" />
+            <Text size="xs" fw={700}>
+              System Status
+            </Text>
+          </Group>
+          <Text size="11px" c="dimmed">
+            All stores synchronized with PostgreSQL linear ledger.
+          </Text>
+        </Box>
       </AppShell.Navbar>
 
+      {/* Main Content Area */}
       <AppShell.Main>
-        <Outlet />
+        <Box maw={1280} mx="auto">
+          <Outlet />
+        </Box>
       </AppShell.Main>
     </AppShell>
   );
