@@ -4,9 +4,10 @@ import { api } from '../../../lib/axios';
 export interface Organization {
   id: string;
   name: string;
-  contact_email: string;
-  contact_phone: string;
-  address: string;
+  subdomain?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export function useOrganizations() {
