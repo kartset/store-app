@@ -4,18 +4,22 @@ import { api } from '../../../lib/axios';
 export interface Store {
   id: string;
   name: string;
-  location: string;
-  contact_email: string;
-  contact_phone: string;
-  organization_name?: string; // Fetched dynamically via dotted fields
+  gst_number?: string | null;
+  address?: string | null;
+  is_active: boolean;
+  organization_id?: string;
+  organization?: {
+    id: string;
+    name: string;
+    subdomain?: string | null;
+  };
 }
 
 export function useStores() {
   return useQuery({
     queryKey: ['stores'],
     queryFn: async () => {
-      // Showcasing the dynamic serializer capability we just built!
-      const response = await api.get<Store[]>('/api/stores/?fields=id,name,location,contact_email,contact_phone,organization.name');
+      const response = await api.get<Store[]>('/api/stores/?fields=id,name,gst_number,address,is_active,organization_id,organization.name,organization.subdomain');
       return response.data;
     },
   });
