@@ -25,11 +25,18 @@ export function LoginForm() {
         // Store JWT tokens securely
         localStorage.setItem('access_token', data.access);
         localStorage.setItem('refresh_token', data.refresh);
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          if (data.user.current_store) {
+            localStorage.setItem('current_store', JSON.stringify(data.user.current_store));
+          }
+        }
         // Navigate to the Dashboard page
         navigate('/');
       },
-      onError: () => {
-        form.setFieldError('email', 'Invalid credentials');
+      onError: (error: any) => {
+        const message = error?.response?.data?.detail || 'Invalid credentials';
+        form.setFieldError('email', message);
       },
     });
   };
