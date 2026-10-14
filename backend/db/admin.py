@@ -1,6 +1,8 @@
 from django.contrib import admin
 
 from .models import (
+    Brand,
+    Category,
     CatalogueItem,
     Customer,
     Delivery,
@@ -59,6 +61,20 @@ class StoreAdmin(BaseModelAdmin):
     search_fields = ('name', 'gst_number', 'organization_id__name')
 
 
+@admin.register(Category)
+class CategoryAdmin(BaseModelAdmin):
+    list_display = ('name', 'parent_id', 'organization_id', 'slug', 'is_active', 'created_at')
+    list_filter = ('organization_id', 'is_active', 'is_deleted')
+    search_fields = ('name', 'slug', 'organization_id__name')
+
+
+@admin.register(Brand)
+class BrandAdmin(BaseModelAdmin):
+    list_display = ('name', 'organization_id', 'is_active', 'created_at')
+    list_filter = ('organization_id', 'is_active', 'is_deleted')
+    search_fields = ('name', 'organization_id__name')
+
+
 @admin.register(CatalogueItem)
 class CatalogueItemAdmin(BaseModelAdmin):
     list_display = ('name', 'sku', 'hsn_code', 'created_at')
@@ -68,9 +84,22 @@ class CatalogueItemAdmin(BaseModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(BaseModelAdmin):
-    list_display = ('name', 'organization_id', 'sku', 'base_mrp', 'hsn_code')
-    search_fields = ('name', 'sku', 'organization_id__name')
-    list_filter = ('organization_id', 'is_deleted')
+    list_display = (
+        'name',
+        'organization_id',
+        'sku',
+        'barcode',
+        'internal_barcode',
+        'category_id',
+        'brand_id',
+        'base_mrp',
+        'cost_price',
+        'tax_slab',
+        'uom',
+        'is_active',
+    )
+    search_fields = ('name', 'sku', 'barcode', 'internal_barcode', 'hsn_code', 'organization_id__name')
+    list_filter = ('organization_id', 'category_id', 'brand_id', 'tax_slab', 'uom', 'is_active', 'is_deleted')
 
 
 @admin.register(Inventory)
