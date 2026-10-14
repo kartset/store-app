@@ -29,6 +29,9 @@ This document outlines the core structural and architectural decisions made for 
 - **Decision:** All foreign keys are referenced using string literals (e.g., `'db.Organization'`) rather than direct Python class imports.
 - **Reason:** Prevents Python-level circular import issues during compilation. It ensures models remain decoupled at the parsing level, even though they all reside within the same `db` module.
 
-## 7. Custom User Model (`AbstractBaseUser`)
-- **Decision:** The custom user model derives strictly from `AbstractBaseUser` rather than Django's default `AbstractUser`.
-- **Reason:** The user actively wants to avoid using the default Django Admin panel. Deriving from `AbstractBaseUser` provides complete control over the authentication schema and removes unnecessary dependencies on Django's default staff/superuser (`is_staff`, `is_superuser`) configurations.
+## 7. Decoupled User & Admin Architecture
+- **Decision:** The application separates internal Django Admin operators from end-user business identities:
+  - **Internal Admin Users (`auth.User`):** Uses Django's default `django.contrib.auth.models.User` (`auth_user` table) strictly for Django Admin (`/admin/`), developer access, and superusers.
+  - **Application Users (`db.User`):** Derives cleanly from `(BaseModel, AbstractBaseUser)` (`db_user` table) without `PermissionsMixin`, `is_staff`, or `is_superuser`. Used for retail store staff, cashiers, managers, and registered customers.
+  - **Authentication:** Application APIs authenticate via `apps.user.auth.AppJWTAuthentication` and `AppTokenObtainPairSerializer`, keeping application tokens and identities isolated to `db.User`.
+  - **Audit Logging:** System-wide audit foreign keys (`created_by`, `updated_by`, `deleted_by`) in `BaseModel` directly reference `db.User`.
