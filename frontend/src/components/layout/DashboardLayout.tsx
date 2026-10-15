@@ -20,6 +20,7 @@ import {
   IconPackage,
   IconLogout,
   IconSparkles,
+  IconCategory,
 } from '@tabler/icons-react';
 import { useMemo } from 'react';
 
@@ -271,6 +272,30 @@ export function DashboardLayout() {
                 fontSize: '14px',
               }}
             />
+
+            {isOrgAdmin && (
+              <NavLink
+                label="Subcategories"
+                description="Custom taxonomy & groups"
+                leftSection={
+                  <ThemeIcon
+                    size={28}
+                    radius="md"
+                    color={location.pathname === '/subcategories' ? 'brand' : 'gray'}
+                    variant={location.pathname === '/subcategories' ? 'filled' : 'light'}
+                  >
+                    <IconCategory size={16} />
+                  </ThemeIcon>
+                }
+                onClick={() => navigate('/subcategories')}
+                active={location.pathname === '/subcategories'}
+                style={{
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                }}
+              />
+            )}
           </Stack>
         </Box>
 
