@@ -9,6 +9,7 @@ from db.models import (
     OrganizationCategory,
     Product,
     StoreCategory,
+    Subcategory,
     UnitOfMeasure,
 )
 from utils.serializers import BaseModelSerializer
@@ -124,12 +125,58 @@ class StoreCategorySerializer(BaseModelSerializer):
         )
 
 
+class SubcategorySerializer(BaseModelSerializer):
+    """Serializer for Organization-specific Subcategories."""
+    category = CategorySerializer(source='category_id', read_only=True)
+    organization = OrganizationSerializer(source='organization_id', read_only=True)
+
+    class Meta:
+        model = Subcategory
+        fields = (
+            'id',
+            'created_at',
+            'updated_at',
+            'deleted_at',
+            'is_deleted',
+            'organization_id',
+            'organization',
+            'category_id',
+            'category',
+            'name',
+            'slug',
+            'description',
+            'is_active',
+            'display_order',
+        )
+
+    def validate(self, attrs):
+        org = attrs.get('organization_id') or (self.instance.organization_id if self.instance else None)
+        category = attrs.get('category_id') or (self.instance.category_id if self.instance else None)
+        name = attrs.get('name') or (self.instance.name if self.instance else None)
+
+        if org and category and name:
+            qs = Subcategory.objects.filter(
+                organization_id=org,
+                category_id=category,
+                name__iexact=name.strip(),
+                is_deleted=False
+            )
+            if self.instance:
+                qs = qs.exclude(id=self.instance.id)
+            if qs.exists():
+                raise serializers.ValidationError({
+                    'name': 'A subcategory with this name already exists in this organization under the selected category.'
+                })
+        return attrs
+
+
 class ProductSerializer(BaseModelSerializer):
     """
     Serializer for Master Catalog Products with dual barcode support,
     tax calculation defaults, and nested category/brand metadata.
     """
     category = CategorySerializer(source='category_id', read_only=True)
+    subcategory = SubcategorySerializer(source='subcategory_id', read_only=True)
     brand = BrandSerializer(source='brand_id', read_only=True)
     organization = OrganizationSerializer(source='organization_id', read_only=True)
 
@@ -146,6 +193,8 @@ class ProductSerializer(BaseModelSerializer):
             'catalogue_item_id',
             'category_id',
             'category',
+            'subcategory_id',
+            'subcategory',
             'brand_id',
             'brand',
             'name',
@@ -232,5 +281,20 @@ class ProductSerializer(BaseModelSerializer):
                 qs = qs.exclude(id=self.instance.id)
             if qs.exists():
                 raise serializers.ValidationError({'internal_barcode': 'A product with this internal barcode already exists in this organization.'})
+
+        # Subcategory organization and category matching check
+        subcategory = attrs.get('subcategory_id', self.instance.subcategory_id if self.instance else None)
+        category = attrs.get('category_id', self.instance.category_id if self.instance else None)
+        if subcategory and org:
+            sub_org_id = subcategory.organization_id_id if hasattr(subcategory, 'organization_id_id') else subcategory.organization_id.id
+            target_org_id = org.id if hasattr(org, 'id') else org
+            if sub_org_id != target_org_id:
+                raise serializers.ValidationError({'subcategory_id': 'Selected subcategory does not belong to this organization.'})
+
+        if subcategory and category:
+            sub_cat_id = subcategory.category_id_id if hasattr(subcategory, 'category_id_id') else subcategory.category_id.id
+            target_cat_id = category.id if hasattr(category, 'id') else category
+            if sub_cat_id != target_cat_id:
+                raise serializers.ValidationError({'subcategory_id': 'Selected subcategory does not belong to the selected category.'})
 
         return attrs

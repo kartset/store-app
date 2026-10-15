@@ -8,12 +8,14 @@ from .views import (
     OrganizationCategoryViewSet,
     ProductViewSet,
     StoreCategoryViewSet,
+    SubcategoryViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'organization-categories', OrganizationCategoryViewSet, basename='organization-category')
 router.register(r'store-categories', StoreCategoryViewSet, basename='store-category')
+router.register(r'subcategories', SubcategoryViewSet, basename='subcategory')
 router.register(r'brands', BrandViewSet, basename='brand')
 router.register(r'', ProductViewSet, basename='product')
 

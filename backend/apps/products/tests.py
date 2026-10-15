@@ -14,6 +14,7 @@ from db.models import (
     Product,
     Store,
     StoreCategory,
+    StoreStaff,
     Subcategory,
     UnitOfMeasure,
     User,
@@ -359,6 +360,14 @@ class MasterCatalogAPITests(TestCase):
         )
         self.brand_amul = Brand.objects.create(organization_id=self.org_1, name='Amul')
 
+        # Grant self.user ORG_ADMIN role in org_1
+        self.org_staff = OrganizationStaff.objects.create(
+            user_id=self.user,
+            organization_id=self.org_1,
+            role='ORG_ADMIN',
+            is_active=True,
+        )
+
     def test_category_api_list_and_filters(self):
         # 1. List all categories
         response = self.client.get('/api/products/categories/')
@@ -581,4 +590,185 @@ class MasterCatalogAPITests(TestCase):
         # 4. Unknown code returns 404
         resp_404 = self.client.get(f'/api/products/barcode/NONEXISTENT-CODE/?organization_id={self.org_1.id}')
         self.assertEqual(resp_404.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_store_staff_cannot_create_update_or_delete_products_or_subcategories(self):
+        """
+        Store staff (e.g. Cashier) cannot add, edit, or delete products or subcategories (403 Forbidden).
+        They can only read catalog items and barcode lookups.
+        """
+        cashier = User.objects.create_user(email='cashier1@fresh.com', password='password123')
+        StoreStaff.objects.create(
+            user_id=cashier,
+            store_id=self.store,
+            role='CASHIER',
+        )
+
+        cashier_client = APIClient()
+        cashier_client.force_authenticate(user=cashier)
+
+        # 1. Store Staff CAN read products
+        read_resp = cashier_client.get(f'/api/products/?organization_id={self.org_1.id}')
+        self.assertEqual(read_resp.status_code, status.HTTP_200_OK)
+
+        # 2. Store Staff CAN read subcategories
+        sub_read_resp = cashier_client.get(f'/api/products/subcategories/?organization_id={self.org_1.id}')
+        self.assertEqual(sub_read_resp.status_code, status.HTTP_200_OK)
+
+        # 3. Store Staff CAN lookup barcodes
+        p = Product.objects.create(
+            organization_id=self.org_1,
+            name='Test Biscuit',
+            sku='SKU-BISC-01',
+            barcode='8901239999999',
+            base_mrp=Decimal('10.00'),
+        )
+        bar_resp = cashier_client.get(f'/api/products/barcode/8901239999999/?organization_id={self.org_1.id}')
+        self.assertEqual(bar_resp.status_code, status.HTTP_200_OK)
+
+        # 4. Store Staff CANNOT create product (403 Forbidden)
+        create_prod_resp = cashier_client.post(
+            '/api/products/',
+            {
+                'organization_id': str(self.org_1.id),
+                'name': 'Unauthorized Product',
+                'sku': 'SKU-UNAUTH-01',
+                'base_mrp': '99.00',
+            },
+            format='json',
+        )
+        self.assertEqual(create_prod_resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Only Organization Admins can create', str(create_prod_resp.data))
+
+        # 5. Store Staff CANNOT edit product (403 Forbidden)
+        edit_prod_resp = cashier_client.patch(
+            f'/api/products/{p.id}/',
+            {'name': 'Modified By Cashier'},
+            format='json',
+        )
+        self.assertEqual(edit_prod_resp.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 6. Store Staff CANNOT delete product (403 Forbidden)
+        del_prod_resp = cashier_client.delete(f'/api/products/{p.id}/')
+        self.assertEqual(del_prod_resp.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 7. Store Staff CANNOT create subcategories (403 Forbidden)
+        sub_create_resp = cashier_client.post(
+            '/api/products/subcategories/',
+            {
+                'organization_id': str(self.org_1.id),
+                'category_id': str(self.cat_child.id),
+                'name': 'Forbidden Subcategory',
+            },
+            format='json',
+        )
+        self.assertEqual(sub_create_resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_subcategory_api_crud_and_validation(self):
+        """Org Admin can create, list, filter, update, and soft delete subcategories."""
+        # 1. Create subcategory under Beverages
+        create_payload = {
+            'organization_id': str(self.org_1.id),
+            'category_id': str(self.cat_child.id),
+            'name': 'Fruit Juices',
+            'slug': 'fruit-juices',
+            'description': 'Packaged fresh juices',
+            'display_order': 1,
+        }
+        resp = self.client.post('/api/products/subcategories/', create_payload, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        sub_id = resp.data['id']
+        self.assertEqual(resp.data['name'], 'Fruit Juices')
+        self.assertEqual(resp.data['category']['name'], 'Beverages')
+
+        # 2. Duplicate subcategory in same org and category fails with 400
+        dup_resp = self.client.post('/api/products/subcategories/', create_payload, format='json')
+        self.assertEqual(dup_resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue('non_field_errors' in dup_resp.data or 'name' in dup_resp.data)
+
+        # 3. Filter by category
+        filter_resp = self.client.get(
+            f'/api/products/subcategories/?organization_id={self.org_1.id}&category_id={self.cat_child.id}'
+        )
+        self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filter_resp.data), 1)
+
+        # 4. Update subcategory
+        patch_resp = self.client.patch(
+            f'/api/products/subcategories/{sub_id}/',
+            {'name': '100% Fruit Juices & Nectars'},
+            format='json',
+        )
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(patch_resp.data['name'], '100% Fruit Juices & Nectars')
+
+        # 5. Soft delete subcategory
+        del_resp = self.client.delete(f'/api/products/subcategories/{sub_id}/')
+        self.assertEqual(del_resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Subcategory.objects.filter(id=sub_id, is_deleted=False).exists())
+
+    def test_product_api_with_subcategory_linkage_and_cross_org_validation(self):
+        """Products can link to subcategories; validating cross-org and mismatched category rejections."""
+        sub_bev = Subcategory.objects.create(
+            organization_id=self.org_1,
+            category_id=self.cat_child,
+            name='Energy Drinks',
+            slug='energy-drinks',
+        )
+
+        # 1. Successfully create product with valid subcategory
+        prod_payload = {
+            'organization_id': str(self.org_1.id),
+            'category_id': str(self.cat_child.id),
+            'subcategory_id': str(sub_bev.id),
+            'brand_id': str(self.brand_amul.id),
+            'name': 'Stamina Energy Drink 250ml',
+            'sku': 'SKU-ENERGY-250',
+            'cost_price': '35.00',
+            'base_mrp': '50.00',
+            'uom': 'ML',
+            'is_active': True,
+        }
+        res = self.client.post('/api/products/', prod_payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['subcategory']['id'], str(sub_bev.id))
+        self.assertEqual(res.data['subcategory']['name'], 'Energy Drinks')
+
+        # 2. Reject subcategory belonging to a different category
+        cat_snacks = Category.objects.create(name='Snacks', slug='snacks')
+        sub_chips = Subcategory.objects.create(
+            organization_id=self.org_1,
+            category_id=cat_snacks,
+            name='Potato Chips',
+            slug='chips',
+        )
+        mismatch_cat_payload = {
+            'organization_id': str(self.org_1.id),
+            'category_id': str(self.cat_child.id),  # Beverages
+            'subcategory_id': str(sub_chips.id),     # Belongs to Snacks
+            'name': 'Mismatched Product',
+            'sku': 'SKU-MISMATCH-CAT',
+            'base_mrp': '20.00',
+        }
+        mismatch_res = self.client.post('/api/products/', mismatch_cat_payload, format='json')
+        self.assertEqual(mismatch_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('subcategory_id', mismatch_res.data)
+
+        # 3. Reject subcategory belonging to a different organization
+        sub_other_org = Subcategory.objects.create(
+            organization_id=self.org_2,
+            category_id=self.cat_child,
+            name='Foreign Subcategory',
+        )
+        foreign_org_payload = {
+            'organization_id': str(self.org_1.id),
+            'category_id': str(self.cat_child.id),
+            'subcategory_id': str(sub_other_org.id),
+            'name': 'Foreign Product',
+            'sku': 'SKU-FOREIGN-SUB',
+            'base_mrp': '40.00',
+        }
+        foreign_res = self.client.post('/api/products/', foreign_org_payload, format='json')
+        self.assertEqual(foreign_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('subcategory_id', foreign_res.data)
+
 
