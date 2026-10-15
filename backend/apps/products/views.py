@@ -60,6 +60,14 @@ class CategoryViewSet(viewsets.ModelViewSet):
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(slug__icontains=search))
 
+        org_id = self.request.query_params.get('organization_id')
+        if org_id:
+            qs = qs.filter(
+                category_orgs__organization_id_id=org_id,
+                category_orgs__is_deleted=False,
+                category_orgs__is_active=True
+            ).distinct()
+
         return qs
 
     def perform_create(self, serializer):

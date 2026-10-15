@@ -20,6 +20,7 @@ import {
   IconPackage,
   IconLogout,
   IconSparkles,
+  IconCategory,
 } from '@tabler/icons-react';
 import { useMemo } from 'react';
 
@@ -61,6 +62,14 @@ export function DashboardLayout() {
     const last = user.last_name?.[0] || '';
     return (first + last).toUpperCase() || user.email?.[0]?.toUpperCase() || 'ST';
   }, [user]);
+
+  const isOrgAdmin = useMemo(() => {
+    if (!user) return false;
+    if (user.is_org_admin || user.role === 'ORG_ADMIN' || user.role === 'SUPER_ADMIN') return true;
+    if (currentStore?.role === 'ORG_ADMIN') return true;
+    if (user.organizations?.some((org: any) => org.role === 'ORG_ADMIN')) return true;
+    return false;
+  }, [user, currentStore]);
 
   return (
     <AppShell
@@ -114,6 +123,29 @@ export function DashboardLayout() {
 
           {/* Active Store Indicator & User Profile */}
           <Group gap="md">
+            {/* Enterprise Role Badge */}
+            {isOrgAdmin ? (
+              <Badge
+                variant="gradient"
+                gradient={{ from: 'indigo', to: 'violet', deg: 45 }}
+                size="md"
+                radius="sm"
+                style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+              >
+                Org Admin
+              </Badge>
+            ) : (
+              <Badge
+                variant="light"
+                color="teal"
+                size="md"
+                radius="sm"
+                style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+              >
+                Store Staff
+              </Badge>
+            )}
+
             {currentStore && (
               <Badge
                 variant="light"
@@ -156,7 +188,7 @@ export function DashboardLayout() {
                   {user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user?.email || 'Store Staff'}
                 </Text>
                 <Text size="10px" c="dimmed" lh={1.2}>
-                  {user?.email || 'Verified Staff'}
+                  {isOrgAdmin ? 'Organization Administrator' : (user?.email || 'Verified Staff')}
                 </Text>
               </Box>
             </Group>
@@ -240,6 +272,30 @@ export function DashboardLayout() {
                 fontSize: '14px',
               }}
             />
+
+            {isOrgAdmin && (
+              <NavLink
+                label="Subcategories"
+                description="Custom taxonomy & groups"
+                leftSection={
+                  <ThemeIcon
+                    size={28}
+                    radius="md"
+                    color={location.pathname === '/subcategories' ? 'brand' : 'gray'}
+                    variant={location.pathname === '/subcategories' ? 'filled' : 'light'}
+                  >
+                    <IconCategory size={16} />
+                  </ThemeIcon>
+                }
+                onClick={() => navigate('/subcategories')}
+                active={location.pathname === '/subcategories'}
+                style={{
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                }}
+              />
+            )}
           </Stack>
         </Box>
 
