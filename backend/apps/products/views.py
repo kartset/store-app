@@ -17,8 +17,10 @@ from db.models import (
     Product,
     Store,
     StoreCategory,
+    Subcategory,
 )
 
+from .permissions import IsOrgAdminOrReadOnly
 from .serializers import (
     BrandSerializer,
     CategorySerializer,
@@ -26,6 +28,7 @@ from .serializers import (
     OrganizationCategorySerializer,
     ProductSerializer,
     StoreCategorySerializer,
+    SubcategorySerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,7 +91,7 @@ class OrganizationCategoryViewSet(viewsets.ModelViewSet):
     """
     queryset = OrganizationCategory.objects.filter(is_deleted=False).select_related('category_id', 'organization_id')
     serializer_class = OrganizationCategorySerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrgAdminOrReadOnly]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -216,7 +219,7 @@ class BrandViewSet(viewsets.ModelViewSet):
     """
     queryset = Brand.objects.filter(is_deleted=False).order_by('name')
     serializer_class = BrandSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOrgAdminOrReadOnly]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -239,19 +242,56 @@ class BrandViewSet(viewsets.ModelViewSet):
         instance.soft_delete(user=self.request.user)
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class SubcategoryViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Master Catalog Products.
-    Supports filtering by organization, category, brand, active status, and live search.
+    ViewSet for Organization-specific Subcategories.
+    Supports filtering by organization_id, category_id, is_active, and search.
     """
-    queryset = Product.objects.filter(is_deleted=False).select_related('category_id', 'brand_id', 'organization_id').order_by('name')
-    serializer_class = ProductSerializer
-    permission_classes = [IsAuthenticated]
+    queryset = Subcategory.objects.filter(is_deleted=False).select_related('category_id', 'organization_id').order_by('display_order', 'name')
+    serializer_class = SubcategorySerializer
+    permission_classes = [IsAuthenticated, IsOrgAdminOrReadOnly]
 
     def get_queryset(self):
         qs = super().get_queryset()
         org_id = self.request.query_params.get('organization_id')
         category_id = self.request.query_params.get('category_id')
+        is_active = self.request.query_params.get('is_active')
+        search = self.request.query_params.get('search')
+
+        if org_id:
+            qs = qs.filter(organization_id_id=org_id)
+        if category_id:
+            qs = qs.filter(category_id_id=category_id)
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active.lower() in ('true', '1'))
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(slug__icontains=search))
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        instance.soft_delete(user=self.request.user)
+
+
+class ProductViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Master Catalog Products.
+    Supports filtering by organization, category, subcategory, brand, active status, and live search.
+    """
+    queryset = Product.objects.filter(is_deleted=False).select_related('category_id', 'subcategory_id', 'brand_id', 'organization_id').order_by('name')
+    serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated, IsOrgAdminOrReadOnly]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        org_id = self.request.query_params.get('organization_id')
+        category_id = self.request.query_params.get('category_id')
+        subcategory_id = self.request.query_params.get('subcategory_id')
         brand_id = self.request.query_params.get('brand_id')
         is_active = self.request.query_params.get('is_active')
         search = self.request.query_params.get('search')
@@ -260,6 +300,8 @@ class ProductViewSet(viewsets.ModelViewSet):
             qs = qs.filter(organization_id_id=org_id)
         if category_id:
             qs = qs.filter(category_id_id=category_id)
+        if subcategory_id:
+            qs = qs.filter(subcategory_id_id=subcategory_id)
         if brand_id:
             qs = qs.filter(brand_id_id=brand_id)
         if is_active is not None:

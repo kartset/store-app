@@ -3,7 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from db.models import User, Organization, Store, StoreStaff, Customer
+from db.models import Customer, Organization, OrganizationStaff, Store, StoreStaff, User
 
 
 class AppLoginStoreGateTests(TestCase):
@@ -183,3 +183,95 @@ class AppLoginStoreGateTests(TestCase):
         )
         self.assertEqual(res_fail.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertIn('User is not associated with the requested store', str(res_fail.data))
+
+    def test_org_admin_without_store_staff_can_login(self):
+        """Org Admin without any physical StoreStaff assignment can authenticate successfully."""
+        org_admin_user = User.objects.create_user(
+            email='hqadmin@testorg.com',
+            password=self.password,
+            first_name='Executive',
+            last_name='Admin',
+            is_active=True,
+        )
+        OrganizationStaff.objects.create(
+            user_id=org_admin_user,
+            organization_id=self.org,
+            role='ORG_ADMIN',
+            is_active=True,
+        )
+
+        res = self.client.post(
+            self.login_url,
+            {'email': org_admin_user.email, 'password': self.password},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('access', res.data)
+        self.assertTrue(res.data['user']['is_org_admin'])
+        self.assertEqual(len(res.data['user']['organizations']), 1)
+        self.assertEqual(res.data['user']['organizations'][0]['role'], 'ORG_ADMIN')
+        # Org store auto-selected as default store context with ORG_ADMIN role
+        self.assertEqual(res.data['user']['current_store']['id'], str(self.store.id))
+        self.assertEqual(res.data['user']['current_store']['role'], 'ORG_ADMIN')
+
+    def test_org_admin_can_target_store_in_own_org(self):
+        """Org Admin can switch/target any store under their organization."""
+        second_store = Store.objects.create(organization_id=self.org, name='Second Store', is_active=True)
+        org_admin_user = User.objects.create_user(
+            email='hqadmin2@testorg.com',
+            password=self.password,
+            first_name='Super',
+            last_name='Admin',
+            is_active=True,
+        )
+        OrganizationStaff.objects.create(
+            user_id=org_admin_user,
+            organization_id=self.org,
+            role='ORG_ADMIN',
+            is_active=True,
+        )
+
+        res = self.client.post(
+            self.login_url,
+            {
+                'email': org_admin_user.email,
+                'password': self.password,
+                'store_id': str(second_store.id),
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['user']['current_store']['id'], str(second_store.id))
+        self.assertEqual(res.data['user']['current_store']['role'], 'ORG_ADMIN')
+
+    def test_org_admin_cannot_target_store_in_other_org(self):
+        """Org Admin cannot target a store belonging to another organization."""
+        other_org = Organization.objects.create(name='Other Org', subdomain='other')
+        other_org_store = Store.objects.create(organization_id=other_org, name='Foreign Store', is_active=True)
+
+        org_admin_user = User.objects.create_user(
+            email='hqadmin3@testorg.com',
+            password=self.password,
+            first_name='HQ',
+            last_name='User',
+            is_active=True,
+        )
+        OrganizationStaff.objects.create(
+            user_id=org_admin_user,
+            organization_id=self.org,
+            role='ORG_ADMIN',
+            is_active=True,
+        )
+
+        res = self.client.post(
+            self.login_url,
+            {
+                'email': org_admin_user.email,
+                'password': self.password,
+                'store_id': str(other_org_store.id),
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn('User is not associated with the requested store', str(res.data))
+
