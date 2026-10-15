@@ -10,9 +10,11 @@ from db.models import (
     Category,
     Organization,
     OrganizationCategory,
+    OrganizationStaff,
     Product,
     Store,
     StoreCategory,
+    Subcategory,
     UnitOfMeasure,
     User,
 )
@@ -226,6 +228,109 @@ class MasterCatalogModelTests(TestCase):
         p.refresh_from_db()
         self.assertTrue(p.is_deleted)
         self.assertIsNotNone(p.deleted_at)
+
+    def test_organization_staff_roles_and_uniqueness(self):
+        """Test OrganizationStaff creation, roles, and uniqueness per (user, organization)."""
+        u1 = User.objects.create_user(email='orgadmin@supermart.com', password='password123')
+        org_staff = OrganizationStaff.objects.create(
+            user_id=u1,
+            organization_id=self.org_1,
+            role='ORG_ADMIN',
+            is_active=True
+        )
+        self.assertEqual(org_staff.role, 'ORG_ADMIN')
+        self.assertTrue(org_staff.is_active)
+        self.assertIn('orgadmin@supermart.com', str(org_staff))
+        self.assertIn('Supermart Org', str(org_staff))
+
+        # Duplicate membership in the same organization raises IntegrityError
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            OrganizationStaff.objects.create(
+                user_id=u1,
+                organization_id=self.org_1,
+                role='CATALOG_MANAGER'
+            )
+
+        # Same user can be staff/admin in a different organization
+        staff_org_2 = OrganizationStaff.objects.create(
+            user_id=u1,
+            organization_id=self.org_2,
+            role='AUDITOR'
+        )
+        self.assertEqual(staff_org_2.organization_id, self.org_2)
+
+    def test_organization_subcategory_hierarchy_and_uniqueness(self):
+        """Test Subcategory model creation, scoping by (organization, category), and uniqueness."""
+        cat_clothes = Category.objects.create(name='Clothes', slug='clothes')
+        cat_electronics = Category.objects.create(name='Electronics', slug='electronics')
+
+        # Org 1 defines subcategories under Clothes
+        sub_bottoms = Subcategory.objects.create(
+            organization_id=self.org_1,
+            category_id=cat_clothes,
+            name='Bottomwear',
+            slug='bottomwear'
+        )
+        sub_tops = Subcategory.objects.create(
+            organization_id=self.org_1,
+            category_id=cat_clothes,
+            name='Topwear',
+            slug='topwear'
+        )
+        self.assertEqual(str(sub_bottoms), 'Clothes > Bottomwear (Supermart Org)')
+        self.assertEqual(sub_tops.slug, 'topwear')
+
+        # Duplicate subcategory name under the same org and category raises IntegrityError
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Subcategory.objects.create(
+                organization_id=self.org_1,
+                category_id=cat_clothes,
+                name='Bottomwear'
+            )
+
+        # Org 2 can use the same subcategory name under the same platform category independently
+        sub_org2 = Subcategory.objects.create(
+            organization_id=self.org_2,
+            category_id=cat_clothes,
+            name='Bottomwear'
+        )
+        self.assertEqual(sub_org2.organization_id, self.org_2)
+
+        # Same org can define the same subcategory name under a DIFFERENT category
+        sub_diff_cat = Subcategory.objects.create(
+            organization_id=self.org_1,
+            category_id=cat_electronics,
+            name='Bottomwear'
+        )
+        self.assertEqual(sub_diff_cat.category_id, cat_electronics)
+
+    def test_product_subcategory_linkage_and_set_null_on_delete(self):
+        """Products can be tagged with an org subcategory; deleting subcategory sets field to NULL."""
+        cat_clothes = Category.objects.create(name='Fashion', slug='fashion')
+        sub_jeans = Subcategory.objects.create(
+            organization_id=self.org_1,
+            category_id=cat_clothes,
+            name='Jeans',
+            slug='jeans'
+        )
+
+        prod = Product.objects.create(
+            organization_id=self.org_1,
+            category_id=cat_clothes,
+            subcategory_id=sub_jeans,
+            name='Slim Fit Denim 32',
+            sku='SKU-JEANS-01',
+            barcode='8901122334455',
+            base_mrp=Decimal('1499.00')
+        )
+        self.assertEqual(prod.subcategory_id, sub_jeans)
+        self.assertIn(prod, sub_jeans.products.all())
+
+        # Subcategory deletion sets subcategory_id to NULL without deleting the product
+        sub_jeans.delete()
+        prod.refresh_from_db()
+        self.assertIsNone(prod.subcategory_id)
+        self.assertEqual(prod.name, 'Slim Fit Denim 32')
 
 
 class MasterCatalogAPITests(TestCase):

@@ -13,12 +13,14 @@ from .models import (
     OrderItem,
     Organization,
     OrganizationCategory,
+    OrganizationStaff,
     Payment,
     Product,
     Store,
     StoreCategory,
     StoreCustomer,
     StoreStaff,
+    Subcategory,
     User,
     Vendor,
 )
@@ -84,6 +86,13 @@ class StoreCategoryAdmin(BaseModelAdmin):
     search_fields = ('store_id__name', 'category_id__name')
 
 
+@admin.register(Subcategory)
+class SubcategoryAdmin(BaseModelAdmin):
+    list_display = ('name', 'category_id', 'organization_id', 'slug', 'is_active', 'created_at')
+    list_filter = ('organization_id', 'category_id', 'is_active', 'is_deleted')
+    search_fields = ('name', 'slug', 'organization_id__name', 'category_id__name')
+
+
 @admin.register(Brand)
 class BrandAdmin(BaseModelAdmin):
     list_display = ('name', 'organization_id', 'is_active', 'created_at')
@@ -107,6 +116,7 @@ class ProductAdmin(BaseModelAdmin):
         'barcode',
         'internal_barcode',
         'category_id',
+        'subcategory_id',
         'brand_id',
         'base_mrp',
         'cost_price',
@@ -115,7 +125,7 @@ class ProductAdmin(BaseModelAdmin):
         'is_active',
     )
     search_fields = ('name', 'sku', 'barcode', 'internal_barcode', 'hsn_code', 'organization_id__name')
-    list_filter = ('organization_id', 'category_id', 'brand_id', 'tax_slab', 'uom', 'is_active', 'is_deleted')
+    list_filter = ('organization_id', 'category_id', 'subcategory_id', 'brand_id', 'tax_slab', 'uom', 'is_active', 'is_deleted')
 
 
 @admin.register(Inventory)
@@ -159,6 +169,13 @@ class PaymentAdmin(BaseModelAdmin):
     list_display = ('id', 'invoice_id', 'method', 'amount', 'status', 'external_transaction_id', 'created_at')
     search_fields = ('invoice_id__id', 'external_transaction_id')
     list_filter = ('method', 'status', 'is_deleted', 'created_at')
+
+
+@admin.register(OrganizationStaff)
+class OrganizationStaffAdmin(BaseModelAdmin):
+    list_display = ('user_id', 'organization_id', 'role', 'is_active', 'created_at')
+    search_fields = ('user_id__email', 'organization_id__name')
+    list_filter = ('role', 'organization_id', 'is_active', 'is_deleted')
 
 
 @admin.register(StoreStaff)
