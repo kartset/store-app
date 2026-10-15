@@ -95,3 +95,38 @@ class StoreCategory(BaseModel):
 
     def __str__(self):
         return f"{self.store_id.name} <> {self.category_id.name}"
+
+
+class Subcategory(BaseModel):
+    """
+    Organization-specific Subcategory (e.g. 'Bottom Wear' or 'Jeans' under 'Clothes').
+    Platform maintains top-level Category; Organizations define granular subcategories
+    tailored to their merchandise mix.
+    """
+    organization_id = models.ForeignKey(
+        'db.Organization',
+        on_delete=models.CASCADE,
+        related_name='subcategories'
+    )
+    category_id = models.ForeignKey(
+        'db.Category',
+        on_delete=models.CASCADE,
+        related_name='org_subcategories'
+    )
+    name = models.CharField(max_length=150)
+    slug = models.SlugField(max_length=150, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    display_order = models.IntegerField(default=0)
+
+    class Meta:
+        verbose_name_plural = 'subcategories'
+        unique_together = ('organization_id', 'category_id', 'name')
+        indexes = [
+            models.Index(fields=['organization_id', 'category_id']),
+            models.Index(fields=['organization_id', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.category_id.name} > {self.name} ({self.organization_id.name})"
+

@@ -37,6 +37,13 @@ class Product(BaseModel):
         blank=True,
         related_name='products'
     )
+    subcategory_id = models.ForeignKey(
+        'db.Subcategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products'
+    )
     brand_id = models.ForeignKey(
         'db.Brand',
         on_delete=models.SET_NULL,
@@ -118,6 +125,7 @@ class Product(BaseModel):
             models.Index(fields=['organization_id', 'sku']),
             models.Index(fields=['organization_id', 'barcode']),
             models.Index(fields=['organization_id', 'internal_barcode']),
+            models.Index(fields=['organization_id', 'subcategory_id']),
             models.Index(fields=['organization_id', 'is_active']),
         ]
 
