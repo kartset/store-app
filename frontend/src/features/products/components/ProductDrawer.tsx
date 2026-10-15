@@ -16,6 +16,7 @@ import {
   Alert,
   Box,
   Divider,
+  Modal,
 } from '@mantine/core';
 import {
   IconPackage,
@@ -24,9 +25,18 @@ import {
   IconAlertCircle,
   IconPercentage,
   IconCash,
+  IconFolderPlus,
+  IconEye,
 } from '@tabler/icons-react';
 import { useState, useMemo } from 'react';
-import { useCategories, useBrands, useCreateProduct, useUpdateProduct } from '../api';
+import {
+  useCategories,
+  useBrands,
+  useCreateProduct,
+  useUpdateProduct,
+  useSubcategories,
+  useCreateSubcategory,
+} from '../api';
 import { useOrganizations } from '../../organizations/api';
 import type { CreateProductPayload, Product, UnitOfMeasure } from '../types';
 
@@ -35,6 +45,7 @@ interface ProductDrawerProps {
   onClose: () => void;
   product: Product | null;
   defaultOrgId?: string;
+  isReadOnly?: boolean;
 }
 
 const UOM_OPTIONS: { value: UnitOfMeasure; label: string }[] = [
@@ -54,6 +65,7 @@ interface ProductDrawerFormProps {
   product: Product | null;
   defaultOrgId?: string;
   organizations?: { id: string; name: string }[];
+  isReadOnly?: boolean;
   onClose: () => void;
 }
 
@@ -61,6 +73,7 @@ function ProductDrawerForm({
   product,
   defaultOrgId,
   organizations,
+  isReadOnly = false,
   onClose,
 }: ProductDrawerFormProps) {
   const [selectedOrgId, setSelectedOrgId] = useState<string>(
@@ -72,11 +85,13 @@ function ProductDrawerForm({
 
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
+  const createSubMutation = useCreateSubcategory();
 
-  // Initialized directly from props without effect
+  // Form State
   const [name, setName] = useState(product?.name || '');
   const [sku, setSku] = useState(product?.sku || '');
   const [categoryId, setCategoryId] = useState<string | null>(product?.category_id || null);
+  const [subcategoryId, setSubcategoryId] = useState<string | null>(product?.subcategory_id || null);
   const [brandId, setBrandId] = useState<string | null>(product?.brand_id || null);
   const [barcode, setBarcode] = useState(product?.barcode || '');
   const [internalBarcode, setInternalBarcode] = useState(product?.internal_barcode || '');
@@ -92,11 +107,24 @@ function ProductDrawerForm({
   const [isReturnable, setIsReturnable] = useState(product?.is_returnable ?? true);
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
 
+  // Subcategories query scoped to selected org and category
+  const { data: subcategories } = useSubcategories(
+    selectedOrgId && categoryId ? { organization_id: selectedOrgId, category_id: categoryId } : undefined
+  );
+
+  // Inline Subcategory Creation Modal State
+  const [newSubModalOpen, setNewSubModalOpen] = useState(false);
+  const [newSubName, setNewSubName] = useState('');
+  const [newSubSlug, setNewSubSlug] = useState('');
+  const [newSubDesc, setNewSubDesc] = useState('');
+  const [subError, setSubError] = useState<string | null>(null);
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Handle Category selection and auto-populate defaults
   const handleCategoryChange = (val: string | null) => {
     setCategoryId(val);
+    setSubcategoryId(null); // Reset subcategory when parent category changes
     if (val && categories) {
       const selected = categories.find((c) => c.id === val);
       if (selected) {
@@ -104,6 +132,41 @@ function ProductDrawerForm({
         if (selected.default_tax_slab !== null && selected.default_tax_slab !== undefined) {
           setTaxSlab(Number(selected.default_tax_slab));
         }
+      }
+    }
+  };
+
+  // Quick Inline Subcategory creation
+  const handleCreateSubcategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubError(null);
+    if (!newSubName.trim() || !selectedOrgId || !categoryId) {
+      setSubError('Subcategory name is required.');
+      return;
+    }
+
+    try {
+      const created = await createSubMutation.mutateAsync({
+        organization_id: selectedOrgId,
+        category_id: categoryId,
+        name: newSubName.trim(),
+        slug: newSubSlug.trim() || undefined,
+        description: newSubDesc.trim() || undefined,
+      });
+      setSubcategoryId(created.id);
+      setNewSubModalOpen(false);
+      setNewSubName('');
+      setNewSubSlug('');
+      setNewSubDesc('');
+    } catch (err: unknown) {
+      const errObj = err as { response?: { data?: Record<string, string | string[]> } };
+      if (errObj.response?.data) {
+        const details = Object.entries(errObj.response.data)
+          .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
+          .join(' | ');
+        setSubError(details);
+      } else {
+        setSubError('Failed to create subcategory.');
       }
     }
   };
@@ -137,6 +200,7 @@ function ProductDrawerForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     setErrorMessage(null);
 
     if (!selectedOrgId) {
@@ -155,6 +219,7 @@ function ProductDrawerForm({
     const payload: CreateProductPayload = {
       organization_id: selectedOrgId,
       category_id: categoryId || null,
+      subcategory_id: subcategoryId || null,
       brand_id: brandId || null,
       name: name.trim(),
       sku: sku.trim(),
@@ -198,6 +263,12 @@ function ProductDrawerForm({
   return (
     <form onSubmit={handleSubmit}>
       <Stack gap="md" pt="sm">
+        {isReadOnly && (
+          <Alert icon={<IconEye size={16} />} title="Store Staff Read-Only Access" color="teal" radius="md">
+            Product catalog records are centrally managed by Organization Admins. Store personnel have view-only access for inventory lookups and thermal sticker printing.
+          </Alert>
+        )}
+
         {errorMessage && (
           <Alert icon={<IconAlertCircle size={16} />} title="Validation Notice" color="red" radius="md">
             {errorMessage}
@@ -212,7 +283,7 @@ function ProductDrawerForm({
           data={organizations?.map((o) => ({ value: o.id, label: o.name })) || []}
           value={selectedOrgId}
           onChange={(val) => setSelectedOrgId(val || '')}
-          disabled={!!product}
+          disabled={!!product || isReadOnly}
         />
 
         {/* Basic Identifiers */}
@@ -223,6 +294,7 @@ function ProductDrawerForm({
             required
             value={name}
             onChange={(e) => setName(e.currentTarget.value)}
+            disabled={isReadOnly}
           />
 
           <TextInput
@@ -231,12 +303,15 @@ function ProductDrawerForm({
             required
             value={sku}
             onChange={(e) => setSku(e.currentTarget.value)}
+            disabled={isReadOnly}
             rightSection={
-              <Tooltip label="Auto-generate SKU from name">
-                <ActionIcon variant="subtle" size="sm" onClick={handleGenerateSku}>
-                  <IconSparkles size={14} />
-                </ActionIcon>
-              </Tooltip>
+              !isReadOnly ? (
+                <Tooltip label="Auto-generate SKU from name">
+                  <ActionIcon variant="subtle" size="sm" onClick={handleGenerateSku}>
+                    <IconSparkles size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              ) : null
             }
           />
         </SimpleGrid>
@@ -244,13 +319,14 @@ function ProductDrawerForm({
         {/* Category & Brand Selectors */}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
           <Select
-            label="Product Category"
-            placeholder="Select category"
+            label="Category (Platform Master)"
+            placeholder="Select platform category"
             data={categories?.map((c) => ({ value: c.id, label: c.name })) || []}
             value={categoryId}
             onChange={handleCategoryChange}
-            clearable
+            clearable={!isReadOnly}
             searchable
+            disabled={isReadOnly}
           />
 
           <Select
@@ -259,10 +335,46 @@ function ProductDrawerForm({
             data={brands?.map((b) => ({ value: b.id, label: b.name })) || []}
             value={brandId}
             onChange={setBrandId}
-            clearable
+            clearable={!isReadOnly}
             searchable
+            disabled={isReadOnly}
           />
         </SimpleGrid>
+
+        {/* Subcategory (Org-Defined) with Inline Creator */}
+        <Box>
+          <Group justify="space-between" mb={4}>
+            <Text component="label" size="sm" fw={500}>
+              Subcategory (Org-Defined)
+            </Text>
+            {!isReadOnly && categoryId && (
+              <Button
+                variant="subtle"
+                size="compact-xs"
+                color="brand"
+                leftSection={<IconFolderPlus size={14} />}
+                onClick={() => setNewSubModalOpen(true)}
+              >
+                + New Subcategory
+              </Button>
+            )}
+          </Group>
+          <Select
+            placeholder={
+              !categoryId
+                ? 'Select a platform category first'
+                : subcategories?.length
+                ? 'Select subcategory (e.g. Jeans, Juices)'
+                : 'No subcategories yet — click + New Subcategory'
+            }
+            data={subcategories?.map((s) => ({ value: s.id, label: s.name })) || []}
+            value={subcategoryId}
+            onChange={setSubcategoryId}
+            disabled={isReadOnly || !categoryId}
+            clearable={!isReadOnly}
+            searchable
+          />
+        </Box>
 
         <Divider label="Dual Barcode Architecture" labelPosition="left" />
 
@@ -275,143 +387,142 @@ function ProductDrawerForm({
             value={barcode}
             onChange={(e) => setBarcode(e.currentTarget.value)}
             leftSection={<IconBarcode size={16} />}
+            disabled={isReadOnly}
           />
 
           <TextInput
-            label="In-Store Sticker Barcode"
-            description="Custom sticker barcode for POS scanning"
-            placeholder="e.g. STK-554433"
+            label="Internal Store Sticker Barcode"
+            description="In-store generated thermal barcode sticker"
+            placeholder="e.g. STK-998811"
             value={internalBarcode}
             onChange={(e) => setInternalBarcode(e.currentTarget.value)}
-            leftSection={<IconBarcode size={16} />}
+            disabled={isReadOnly}
             rightSection={
-              <Tooltip label="Generate new in-store sticker barcode">
-                <ActionIcon variant="light" color="brand" size="sm" onClick={handleGenerateInternalBarcode}>
-                  <IconSparkles size={14} />
-                </ActionIcon>
-              </Tooltip>
+              !isReadOnly ? (
+                <Tooltip label="Generate random sticker barcode">
+                  <ActionIcon variant="light" size="sm" color="brand" onClick={handleGenerateInternalBarcode}>
+                    <IconSparkles size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              ) : null
             }
           />
         </SimpleGrid>
 
-        <Divider label="Valuation & Taxation" labelPosition="left" />
+        <Divider label="Tax & Commercial Pricing" labelPosition="left" />
 
-        {/* Pricing, Cost, Tax Slab */}
+        {/* Financials & GST Tax Slabs */}
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
           <NumberInput
             label="Cost Price (₹)"
-            description="Purchase / wholesale cost"
-            value={costPrice}
-            onChange={setCostPrice}
+            description="Wholesale purchase rate"
             min={0}
             decimalScale={2}
+            fixedDecimalScale
+            value={costPrice}
+            onChange={(val) => setCostPrice(val || 0)}
             leftSection={<IconCash size={16} />}
+            disabled={isReadOnly}
           />
 
           <NumberInput
-            label="Maximum Retail Price (₹)"
-            description="Standard selling MRP"
-            value={baseMrp}
-            onChange={setBaseMrp}
+            label="Base MRP (₹)"
+            description="Maximum Retail Price"
             min={0}
             decimalScale={2}
-            required
+            fixedDecimalScale
+            value={baseMrp}
+            onChange={(val) => setBaseMrp(val || 0)}
             leftSection={<IconCash size={16} />}
+            disabled={isReadOnly}
           />
 
           <Box>
-            <Text size="xs" fw={500} mb={4}>
-              Gross Margin Indicator
+            <Text size="sm" fw={500} mb={4}>
+              Gross Margin %
             </Text>
             <Badge
-              size="lg"
+              size="xl"
+              radius="md"
               variant="light"
-              color={Number(marginPercentage) >= 20 ? 'teal' : Number(marginPercentage) > 0 ? 'orange' : 'gray'}
-              h={36}
-              fullWidth
+              color={Number(marginPercentage) >= 20 ? 'teal' : Number(marginPercentage) > 0 ? 'yellow' : 'red'}
+              style={{ width: '100%', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              {marginPercentage}% Est. Margin
+              <IconPercentage size={16} style={{ marginRight: '6px' }} />
+              {marginPercentage}% Margin
             </Badge>
           </Box>
         </SimpleGrid>
 
-        {/* Tax Slabs & HSN */}
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-          <div>
-            <NumberInput
-              label="GST Tax Slab (%)"
-              value={taxSlab}
-              onChange={setTaxSlab}
-              min={0}
-              max={100}
-              decimalScale={2}
-              leftSection={<IconPercentage size={16} />}
-            />
-            <Group gap={4} mt={6}>
-              {TAX_SLABS.map((rate) => (
-                <Button
-                  key={rate}
-                  size="compact-xs"
-                  variant={taxSlab === rate ? 'filled' : 'light'}
-                  color="brand"
-                  onClick={() => setTaxSlab(rate)}
-                >
-                  {rate}%
-                </Button>
-              ))}
-            </Group>
-          </div>
+        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+          <Select
+            label="GST Tax Slab (%)"
+            description="Applicable GST rate"
+            data={TAX_SLABS.map((slab) => ({ value: String(slab), label: `${slab}% GST` }))}
+            value={String(taxSlab)}
+            onChange={(val) => setTaxSlab(Number(val) || 0)}
+            disabled={isReadOnly}
+          />
 
           <TextInput
-            label="HSN / SAC Code"
+            label="HSN Code"
             description="Harmonized System of Nomenclature"
             placeholder="e.g. 0401"
             value={hsnCode}
             onChange={(e) => setHsnCode(e.currentTarget.value)}
+            disabled={isReadOnly}
           />
-        </SimpleGrid>
 
-        <Divider label="Inventory & Fulfillment" labelPosition="left" />
-
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
           <Select
             label="Unit of Measure (UOM)"
+            description="Inventory counting unit"
             data={UOM_OPTIONS}
             value={uom}
-            onChange={(val) => setUom(val as UnitOfMeasure)}
-            required
-          />
-
-          <NumberInput
-            label="Low Stock Alert Threshold"
-            description="Triggers replenishment warnings"
-            value={lowStockThreshold}
-            onChange={setLowStockThreshold}
-            min={1}
+            onChange={(val) => setUom((val as UnitOfMeasure) || 'PCS')}
+            disabled={isReadOnly}
           />
         </SimpleGrid>
 
-        {/* Toggles */}
+        <Divider label="Inventory & Logistics Attributes" labelPosition="left" />
+
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+          <NumberInput
+            label="Low Stock Alert Threshold"
+            description="Minimum units before low-stock warning"
+            min={0}
+            value={lowStockThreshold}
+            onChange={(val) => setLowStockThreshold(val || 0)}
+            disabled={isReadOnly}
+          />
+
+          <Box />
+        </SimpleGrid>
+
+        {/* Item Flags */}
         <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md">
           <Switch
             label="Perishable"
             checked={isPerishable}
             onChange={(e) => setIsPerishable(e.currentTarget.checked)}
+            disabled={isReadOnly}
           />
           <Switch
             label="Has Expiry"
             checked={hasExpiry}
             onChange={(e) => setHasExpiry(e.currentTarget.checked)}
+            disabled={isReadOnly}
           />
           <Switch
             label="Returnable"
             checked={isReturnable}
             onChange={(e) => setIsReturnable(e.currentTarget.checked)}
+            disabled={isReadOnly}
           />
           <Switch
             label="Active"
             checked={isActive}
             onChange={(e) => setIsActive(e.currentTarget.checked)}
+            disabled={isReadOnly}
           />
         </SimpleGrid>
 
@@ -421,25 +532,94 @@ function ProductDrawerForm({
           rows={2}
           value={description}
           onChange={(e) => setDescription(e.currentTarget.value)}
+          disabled={isReadOnly}
         />
 
         {/* Actions */}
         <Group justify="flex-end" mt="lg">
           <Button variant="default" onClick={onClose} disabled={isSaving}>
-            Cancel
+            {isReadOnly ? 'Close' : 'Cancel'}
           </Button>
-          <Button
-            type="submit"
-            loading={isSaving}
-            style={{
-              background: 'var(--brand-gradient)',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-          >
-            {product ? 'Save Changes' : 'Create Product'}
-          </Button>
+          {!isReadOnly && (
+            <Button
+              type="submit"
+              loading={isSaving}
+              style={{
+                background: 'var(--brand-gradient)',
+                boxShadow: 'var(--shadow-sm)',
+              }}
+            >
+              {product ? 'Save Changes' : 'Create Product'}
+            </Button>
+          )}
         </Group>
       </Stack>
+
+      {/* Inline Modal for quick Subcategory creation */}
+      <Modal
+        opened={newSubModalOpen}
+        onClose={() => setNewSubModalOpen(false)}
+        title={
+          <Group gap="xs">
+            <IconFolderPlus size={20} color="var(--brand-primary)" />
+            <Text fw={700}>Add Custom Subcategory</Text>
+          </Group>
+        }
+        centered
+        radius="md"
+      >
+        <Stack gap="sm">
+          {subError && (
+            <Alert icon={<IconAlertCircle size={16} />} title="Notice" color="red" radius="md">
+              {subError}
+            </Alert>
+          )}
+
+          <Text size="xs" c="dimmed">
+            Organization-defined subcategory under{' '}
+            <Text component="span" fw={700} c="brand">
+              {categories?.find((c) => c.id === categoryId)?.name || 'selected category'}
+            </Text>
+          </Text>
+
+          <TextInput
+            label="Subcategory Name"
+            placeholder="e.g. Jeans, T-Shirts, Packaged Milk"
+            required
+            value={newSubName}
+            onChange={(e) => setNewSubName(e.currentTarget.value)}
+            autoFocus
+          />
+
+          <TextInput
+            label="Slug (Optional)"
+            placeholder="e.g. jeans"
+            value={newSubSlug}
+            onChange={(e) => setNewSubSlug(e.currentTarget.value)}
+          />
+
+          <Textarea
+            label="Description (Optional)"
+            placeholder="Notes on this merchandising group"
+            rows={2}
+            value={newSubDesc}
+            onChange={(e) => setNewSubDesc(e.currentTarget.value)}
+          />
+
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={() => setNewSubModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateSubcategory}
+              loading={createSubMutation.isPending}
+              style={{ background: 'var(--brand-gradient)' }}
+            >
+              Create Subcategory
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </form>
   );
 }
@@ -449,6 +629,7 @@ export function ProductDrawer({
   onClose,
   product,
   defaultOrgId,
+  isReadOnly = false,
 }: ProductDrawerProps) {
   const { data: organizations } = useOrganizations();
 
@@ -462,9 +643,20 @@ export function ProductDrawer({
         <Group gap="xs">
           <IconPackage size={22} color="var(--brand-primary)" />
           <div>
-            <Text fw={700} size="md">
-              {product ? 'Edit Catalog Product' : 'Create Master Product'}
-            </Text>
+            <Group gap="xs" align="center">
+              <Text fw={700} size="md">
+                {isReadOnly
+                  ? 'Product Specifications'
+                  : product
+                  ? 'Edit Catalog Product'
+                  : 'Create Master Product'}
+              </Text>
+              {isReadOnly && (
+                <Badge variant="light" color="teal" size="sm">
+                  Store Staff View
+                </Badge>
+              )}
+            </Group>
             <Text size="xs" c="dimmed">
               Organization Master Catalog Entry
             </Text>
@@ -481,6 +673,7 @@ export function ProductDrawer({
           product={product}
           defaultOrgId={defaultOrgId}
           organizations={organizations}
+          isReadOnly={isReadOnly}
           onClose={onClose}
         />
       )}

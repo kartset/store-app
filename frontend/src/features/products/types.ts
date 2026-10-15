@@ -26,6 +26,30 @@ export interface Category {
   subcategories?: Category[];
 }
 
+export interface Subcategory {
+  id: string;
+  organization_id: string;
+  category_id: string;
+  category?: Category | null;
+  name: string;
+  slug?: string | null;
+  description?: string | null;
+  is_active: boolean;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateSubcategoryPayload {
+  organization_id: string;
+  category_id: string;
+  name: string;
+  slug?: string | null;
+  description?: string | null;
+  display_order?: number;
+  is_active?: boolean;
+}
+
 export interface Brand {
   id: string;
   organization_id: string;
@@ -41,6 +65,8 @@ export interface Product {
   catalogue_item_id?: string | null;
   category_id?: string | null;
   category?: Category | null;
+  subcategory_id?: string | null;
+  subcategory?: Subcategory | null;
   brand_id?: string | null;
   brand?: Brand | null;
   name: string;
@@ -65,6 +91,7 @@ export interface Product {
 export interface CreateProductPayload {
   organization_id: string;
   category_id?: string | null;
+  subcategory_id?: string | null;
   brand_id?: string | null;
   name: string;
   sku: string;

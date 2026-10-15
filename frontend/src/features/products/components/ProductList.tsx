@@ -34,9 +34,17 @@ import {
   IconCopy,
   IconCheck,
   IconBuildingSkyscraper,
+  IconEye,
+  IconCategory,
 } from '@tabler/icons-react';
 import { useState, useMemo } from 'react';
-import { useProducts, useCategories, useBrands, useDeleteProduct } from '../api';
+import {
+  useProducts,
+  useCategories,
+  useBrands,
+  useSubcategories,
+  useDeleteProduct,
+} from '../api';
 import { useOrganizations } from '../../organizations/api';
 import { ProductDrawer } from './ProductDrawer';
 import { BarcodeStickerModal } from './BarcodeStickerModal';
@@ -46,22 +54,55 @@ export function ProductList() {
   const { data: organizations } = useOrganizations();
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
 
-  // Default to first org when loaded
+  // Read authenticated user & active store role from localStorage
+  const user = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const currentStore = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('current_store');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Determine if current user has Org Admin rights
+  const isOrgAdmin = useMemo(() => {
+    if (user?.is_org_admin) return true;
+    if (currentStore?.role === 'ORG_ADMIN') return true;
+    if (user?.organizations?.some((o: { role?: string }) => o.role === 'ORG_ADMIN')) return true;
+    return false;
+  }, [user, currentStore]);
+
+  // Default to user's current store organization or first org
   const activeOrgId = useMemo(() => {
     if (selectedOrgId) return selectedOrgId;
+    if (currentStore?.organization_id) return currentStore.organization_id;
+    if (user?.organizations?.[0]?.id) return user.organizations[0].id;
     return organizations?.[0]?.id || '';
-  }, [selectedOrgId, organizations]);
+  }, [selectedOrgId, currentStore, user, organizations]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [subcategoryFilter, setSubcategoryFilter] = useState<string | null>(null);
   const [brandFilter, setBrandFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Fetch products, categories, brands
+  // Fetch products, categories, subcategories, brands
   const { data: products, isLoading, error } = useProducts({
     organization_id: activeOrgId || undefined,
   });
   const { data: categories } = useCategories();
+  const { data: subcategories } = useSubcategories(
+    activeOrgId ? { organization_id: activeOrgId, category_id: categoryFilter || undefined } : undefined
+  );
   const { data: brands } = useBrands(activeOrgId || undefined);
   const deleteMutation = useDeleteProduct();
 
@@ -80,12 +121,20 @@ export function ProductList() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  // Reset subcategory filter when category filter changes
+  const handleCategoryFilterChange = (val: string | null) => {
+    setCategoryFilter(val);
+    setSubcategoryFilter(null);
+  };
+
   // Filter products locally for instantaneous UI responsiveness
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     return products.filter((prod) => {
       // Category filter
       if (categoryFilter && prod.category_id !== categoryFilter) return false;
+      // Subcategory filter
+      if (subcategoryFilter && prod.subcategory_id !== subcategoryFilter) return false;
       // Brand filter
       if (brandFilter && prod.brand_id !== brandFilter) return false;
       // Status filter
@@ -100,14 +149,15 @@ export function ProductList() {
         const matchesBarcode = prod.barcode?.toLowerCase().includes(q);
         const matchesInternal = prod.internal_barcode?.toLowerCase().includes(q);
         const matchesHsn = prod.hsn_code?.toLowerCase().includes(q);
-        if (!matchesName && !matchesSku && !matchesBarcode && !matchesInternal && !matchesHsn) {
+        const matchesSub = prod.subcategory?.name?.toLowerCase().includes(q);
+        if (!matchesName && !matchesSku && !matchesBarcode && !matchesInternal && !matchesHsn && !matchesSub) {
           return false;
         }
       }
 
       return true;
     });
-  }, [products, categoryFilter, brandFilter, statusFilter, searchQuery]);
+  }, [products, categoryFilter, subcategoryFilter, brandFilter, statusFilter, searchQuery]);
 
   // KPI Calculations
   const stats = useMemo(() => {
@@ -136,20 +186,31 @@ export function ProductList() {
       {/* Page Header */}
       <Group justify="space-between" align="flex-end" mb="xl">
         <div>
-          <Badge variant="light" color="brand" size="sm" radius="sm" mb={6}>
-            Master Product Catalog
-          </Badge>
+          <Group gap="xs" mb={6}>
+            <Badge variant="light" color="brand" size="sm" radius="sm">
+              Master Product Catalog
+            </Badge>
+            {isOrgAdmin ? (
+              <Badge variant="gradient" gradient={{ from: 'indigo', to: 'violet' }} size="sm" radius="sm">
+                HQ Merchandising Governance
+              </Badge>
+            ) : (
+              <Badge variant="light" color="teal" size="sm" radius="sm">
+                Store Staff (Read Only)
+              </Badge>
+            )}
+          </Group>
           <Title order={1} fw={800} style={{ letterSpacing: '-0.02em' }}>
             Products & Barcodes
           </Title>
           <Text size="sm" c="dimmed" mt={4}>
-            Centralized SKU ledger, dual barcodes (manufacturer EAN & in-store sticker), pricing, and GST tax slabs.
+            Centralized SKU ledger, platform categories, org subcategories, dual barcodes, and GST tax slabs.
           </Text>
         </div>
 
         <Group gap="sm">
-          {/* Organization Tenant Switcher */}
-          {organizations && organizations.length > 1 && (
+          {/* Organization Tenant Switcher (Only if user is Org Admin and multiple orgs exist) */}
+          {organizations && organizations.length > 1 && isOrgAdmin && (
             <Select
               placeholder="Organization"
               leftSection={<IconBuildingSkyscraper size={16} />}
@@ -160,19 +221,34 @@ export function ProductList() {
             />
           )}
 
-          <Button
-            leftSection={<IconPlus size={16} />}
-            onClick={() => {
-              setEditingProduct(null);
-              setDrawerOpened(true);
-            }}
-            style={{
-              background: 'var(--brand-gradient)',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-          >
-            Add Product
-          </Button>
+          {isOrgAdmin ? (
+            <Button
+              leftSection={<IconPlus size={16} />}
+              onClick={() => {
+                setEditingProduct(null);
+                setDrawerOpened(true);
+              }}
+              style={{
+                background: 'var(--brand-gradient)',
+                boxShadow: 'var(--shadow-sm)',
+              }}
+            >
+              Add Product
+            </Button>
+          ) : (
+            <Tooltip label="Only Org Admins can add or delete master catalog products. Store personnel have inventory & barcode lookup rights.">
+              <Badge
+                size="lg"
+                radius="md"
+                variant="light"
+                color="teal"
+                leftSection={<IconEye size={14} />}
+                style={{ padding: '8px 14px' }}
+              >
+                Store Staff View
+              </Badge>
+            </Tooltip>
+          )}
         </Group>
       </Group>
 
@@ -200,11 +276,11 @@ export function ProductList() {
             {stats.total}
           </Text>
           <Text size="xs" c="dimmed" mt={4}>
-            Across {stats.categoriesCount} active categories
+            {stats.active} items active in catalog
           </Text>
         </Card>
 
-        {/* Active SKUs */}
+        {/* Categories Covered */}
         <Card
           p="lg"
           radius="lg"
@@ -216,17 +292,17 @@ export function ProductList() {
         >
           <Group justify="space-between" mb="xs">
             <Text size="xs" fw={700} c="dimmed" style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Active on POS
+              Taxonomy Mix
             </Text>
             <ThemeIcon size={34} radius="md" color="teal" variant="light">
-              <IconBarcode size={18} />
+              <IconTags size={18} />
             </ThemeIcon>
           </Group>
           <Text size="28px" fw={800} lh={1.1} c="teal">
-            {stats.active}
+            {stats.categoriesCount}
           </Text>
           <Text size="xs" c="dimmed" mt={4}>
-            {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% available for billing
+            Active Category classifications
           </Text>
         </Card>
 
@@ -242,7 +318,7 @@ export function ProductList() {
         >
           <Group justify="space-between" mb="xs">
             <Text size="xs" fw={700} c="dimmed" style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-              Est. Gross Margin
+              Avg Gross Margin
             </Text>
             <ThemeIcon size={34} radius="md" color="indigo" variant="light">
               <IconTrendingUp size={18} />
@@ -293,10 +369,10 @@ export function ProductList() {
           border: '1px solid var(--border-subtle)',
         }}
       >
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="sm">
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 5 }} spacing="sm">
           {/* Live Search */}
           <TextInput
-            placeholder="Search by Name, SKU, Barcode, HSN..."
+            placeholder="Search Name, SKU, Barcode, Subcategory..."
             leftSection={<IconSearch size={16} />}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.currentTarget.value)}
@@ -308,9 +384,21 @@ export function ProductList() {
             leftSection={<IconTags size={16} />}
             data={categories?.map((c) => ({ value: c.id, label: c.name })) || []}
             value={categoryFilter}
-            onChange={setCategoryFilter}
+            onChange={handleCategoryFilterChange}
             clearable
             searchable
+          />
+
+          {/* Subcategory Filter */}
+          <Select
+            placeholder={categoryFilter ? 'All Subcategories' : 'Subcategories'}
+            leftSection={<IconCategory size={16} />}
+            data={subcategories?.map((s) => ({ value: s.id, label: s.name })) || []}
+            value={subcategoryFilter}
+            onChange={setSubcategoryFilter}
+            clearable
+            searchable
+            disabled={!categoryFilter && (!subcategories || subcategories.length === 0)}
           />
 
           {/* Brand Filter */}
@@ -348,202 +436,215 @@ export function ProductList() {
         }}
       >
         {isLoading ? (
-          <Center h={320}>
-            <Group gap="md">
-              <Loader size="md" color="brand" />
-              <Text size="sm" c="dimmed" fw={600}>
-                Synchronizing product catalog...
+          <Center py={60}>
+            <Stack align="center" gap="xs">
+              <Loader color="brand" size="md" />
+              <Text size="sm" c="dimmed">
+                Loading master products...
               </Text>
-            </Group>
+            </Stack>
           </Center>
         ) : error ? (
-          <Center h={200} p="xl">
-            <Text c="red" fw={600}>
-              Failed to load product catalog. Please verify backend service status.
+          <Center py={60}>
+            <Text c="red" size="sm">
+              Failed to load catalog products. Please check server connectivity.
             </Text>
           </Center>
         ) : filteredProducts.length === 0 ? (
-          <Center h={280} p="xl">
+          <Center py={60}>
             <Stack align="center" gap="xs">
               <ThemeIcon size={48} radius="xl" color="gray" variant="light">
                 <IconPackage size={24} />
               </ThemeIcon>
-              <Text fw={700} size="md">
+              <Text fw={600} size="md">
                 No products found
               </Text>
-              <Text size="xs" c="dimmed" ta="center" maw={320}>
-                {searchQuery || categoryFilter || brandFilter
-                  ? 'No products matched your search or filters. Try clearing your search parameters.'
-                  : 'Get started by creating your first catalog product with barcodes and pricing.'}
+              <Text size="sm" c="dimmed" maw={360} ta="center">
+                {searchQuery || categoryFilter || subcategoryFilter || brandFilter
+                  ? 'No items match your active search filters.'
+                  : 'Start by creating your first master product in this organization.'}
               </Text>
-              <Button
-                size="xs"
-                variant="light"
-                color="brand"
-                mt="xs"
-                leftSection={<IconPlus size={14} />}
-                onClick={() => {
-                  setEditingProduct(null);
-                  setDrawerOpened(true);
-                }}
-              >
-                Add Product
-              </Button>
+              {isOrgAdmin && !searchQuery && (
+                <Button
+                  size="xs"
+                  mt="xs"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={() => {
+                    setEditingProduct(null);
+                    setDrawerOpened(true);
+                  }}
+                  style={{ background: 'var(--brand-gradient)' }}
+                >
+                  Create Product
+                </Button>
+              )}
             </Stack>
           </Center>
         ) : (
-          <Table.ScrollContainer minWidth={900}>
+          <Table.ScrollContainer minWidth={950}>
             <Table verticalSpacing="sm" horizontalSpacing="md" highlightOnHover>
-              <Table.Thead style={{ backgroundColor: 'var(--bg-surface-subtle)' }}>
+              <Table.Thead style={{ backgroundColor: 'var(--bg-surface-hover)' }}>
                 <Table.Tr>
-                  <Table.Th style={{ width: '280px' }}>Product & SKU</Table.Th>
-                  <Table.Th>Category / Brand</Table.Th>
-                  <Table.Th>Barcodes (EAN / Sticker)</Table.Th>
-                  <Table.Th>Cost & MRP</Table.Th>
-                  <Table.Th>Tax Slab</Table.Th>
+                  <Table.Th>Product Details</Table.Th>
+                  <Table.Th>Category & Subcategory</Table.Th>
+                  <Table.Th>Dual Barcodes / SKU</Table.Th>
+                  <Table.Th>Commercials & MRP</Table.Th>
+                  <Table.Th>GST Slab</Table.Th>
                   <Table.Th>Status</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Actions</Table.Th>
                 </Table.Tr>
               </Table.Thead>
-
               <Table.Tbody>
                 {filteredProducts.map((prod) => {
-                  const cost = Number(prod.cost_price) || 0;
                   const mrp = Number(prod.base_mrp) || 0;
-                  const margin = mrp > 0 ? (((mrp - cost) / mrp) * 100).toFixed(0) : '0';
+                  const cost = Number(prod.cost_price) || 0;
+                  const margin = mrp > 0 ? (((mrp - cost) / mrp) * 100).toFixed(1) : 0;
 
                   return (
                     <Table.Tr key={prod.id}>
-                      {/* Product Name & SKU */}
+                      {/* Product Name & Brand */}
                       <Table.Td>
                         <Group gap="sm" wrap="nowrap">
                           <ThemeIcon size={34} radius="md" color="brand" variant="light">
                             <IconPackage size={18} />
                           </ThemeIcon>
-                          <Box style={{ minWidth: 0 }}>
-                            <Text size="sm" fw={700} lineClamp={1}>
+                          <div>
+                            <Text size="sm" fw={700}>
                               {prod.name}
                             </Text>
                             <Group gap={6} mt={2}>
-                              <Badge size="xs" variant="outline" color="gray" radius="sm">
-                                {prod.sku}
+                              {prod.brand && (
+                                <Badge size="xs" variant="outline" color="gray" radius="sm">
+                                  {prod.brand.name}
+                                </Badge>
+                              )}
+                              <Badge size="xs" variant="light" color="indigo" radius="sm">
+                                {prod.uom}
                               </Badge>
                               {prod.is_perishable && (
-                                <Badge size="xs" color="orange" variant="light">
+                                <Badge size="xs" color="orange" variant="dot">
                                   Perishable
                                 </Badge>
                               )}
-                              <Text size="11px" c="dimmed">
-                                {prod.uom}
-                              </Text>
                             </Group>
-                          </Box>
+                          </div>
                         </Group>
                       </Table.Td>
 
-                      {/* Category & Brand */}
-                      <Table.Td>
-                        <Stack gap={2}>
-                          {prod.category?.name ? (
-                            <Badge size="xs" color="indigo" variant="light">
-                              {prod.category.name}
-                            </Badge>
-                          ) : (
-                            <Text size="xs" c="dimmed">
-                              Uncategorized
-                            </Text>
-                          )}
-                          {prod.brand?.name && (
-                            <Text size="11px" fw={600} c="dimmed">
-                              Brand: {prod.brand.name}
-                            </Text>
-                          )}
-                        </Stack>
-                      </Table.Td>
-
-                      {/* Barcodes */}
+                      {/* Category & Org Subcategory */}
                       <Table.Td>
                         <Stack gap={4}>
-                          {prod.barcode ? (
-                            <Group gap={4}>
-                              <Tooltip label="Global Manufacturer EAN-13">
-                                <Badge size="xs" color="blue" variant="dot">
-                                  {prod.barcode}
-                                </Badge>
-                              </Tooltip>
-                              <ActionIcon
-                                size="xs"
-                                variant="subtle"
-                                onClick={() => handleCopy(prod.barcode!)}
-                              >
-                                {copiedCode === prod.barcode ? <IconCheck size={12} color="teal" /> : <IconCopy size={12} />}
-                              </ActionIcon>
-                            </Group>
-                          ) : null}
-
-                          {prod.internal_barcode ? (
-                            <Group gap={4}>
-                              <Tooltip label="In-Store Sticker Barcode">
-                                <Badge size="xs" color="violet" variant="outline">
-                                  {prod.internal_barcode}
-                                </Badge>
-                              </Tooltip>
-                              <ActionIcon
-                                size="xs"
-                                variant="subtle"
-                                onClick={() => handleCopy(prod.internal_barcode!)}
-                              >
-                                {copiedCode === prod.internal_barcode ? <IconCheck size={12} color="teal" /> : <IconCopy size={12} />}
-                              </ActionIcon>
-                            </Group>
-                          ) : null}
-
-                          {!prod.barcode && !prod.internal_barcode && (
-                            <Text size="xs" c="dimmed">
-                              No barcode set
+                          <Text size="sm" fw={600}>
+                            {prod.category?.name || 'Uncategorized'}
+                          </Text>
+                          {prod.subcategory ? (
+                            <Badge size="xs" variant="light" color="indigo" radius="sm" leftSection={<IconCategory size={10} />}>
+                              {prod.subcategory.name}
+                            </Badge>
+                          ) : (
+                            <Text size="11px" c="dimmed">
+                              No Subcategory
                             </Text>
                           )}
                         </Stack>
                       </Table.Td>
 
-                      {/* Cost & MRP */}
+                      {/* SKU & Barcodes */}
                       <Table.Td>
-                        <div>
-                          <Text size="sm" fw={800}>
-                            ₹{mrp.toFixed(2)}
-                          </Text>
-                          <Group gap={6} mt={2}>
-                            <Text size="11px" c="dimmed">
-                              Cost: ₹{cost.toFixed(2)}
+                        <Stack gap={3}>
+                          <Group gap={4}>
+                            <Text size="xs" c="dimmed" fw={600}>
+                              SKU:
                             </Text>
-                            <Badge size="xs" color={Number(margin) >= 20 ? 'teal' : 'gray'} variant="light">
-                              {margin}% margin
-                            </Badge>
+                            <Text size="xs" fw={700} style={{ fontFamily: 'monospace' }}>
+                              {prod.sku}
+                            </Text>
+                            <Tooltip label={copiedCode === prod.sku ? 'Copied!' : 'Copy SKU'}>
+                              <ActionIcon
+                                variant="subtle"
+                                size="xs"
+                                color="gray"
+                                onClick={() => handleCopy(prod.sku)}
+                              >
+                                {copiedCode === prod.sku ? <IconCheck size={12} color="green" /> : <IconCopy size={12} />}
+                              </ActionIcon>
+                            </Tooltip>
                           </Group>
-                        </div>
+
+                          {prod.barcode ? (
+                            <Group gap={4}>
+                              <IconBarcode size={13} color="var(--brand-primary)" />
+                              <Text size="11px" fw={600} style={{ fontFamily: 'monospace' }}>
+                                {prod.barcode}
+                              </Text>
+                              <Tooltip label={copiedCode === prod.barcode ? 'Copied!' : 'Copy EAN Barcode'}>
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="xs"
+                                  color="gray"
+                                  onClick={() => handleCopy(prod.barcode!)}
+                                >
+                                  {copiedCode === prod.barcode ? <IconCheck size={12} color="green" /> : <IconCopy size={12} />}
+                                </ActionIcon>
+                              </Tooltip>
+                            </Group>
+                          ) : (
+                            <Text size="10px" c="dimmed">
+                              No EAN Barcode
+                            </Text>
+                          )}
+
+                          {prod.internal_barcode && (
+                            <Badge size="xs" variant="outline" color="teal" radius="sm">
+                              Sticker: {prod.internal_barcode}
+                            </Badge>
+                          )}
+                        </Stack>
                       </Table.Td>
 
-                      {/* Tax Slab */}
+                      {/* Commercial Pricing & Margin */}
                       <Table.Td>
-                        <div>
-                          <Badge size="sm" color="cyan" variant="light">
+                        <Stack gap={2}>
+                          <Group gap={6}>
+                            <Text size="sm" fw={800} c="brand">
+                              ₹{Number(prod.base_mrp).toFixed(2)}
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                              MRP
+                            </Text>
+                          </Group>
+                          <Group gap={6}>
+                            <Text size="xs" c="dimmed">
+                              Cost: ₹{Number(prod.cost_price).toFixed(2)}
+                            </Text>
+                            <Text
+                              size="xs"
+                              fw={700}
+                              c={Number(margin) >= 20 ? 'teal' : Number(margin) > 0 ? 'yellow' : 'red'}
+                            >
+                              ({margin}%)
+                            </Text>
+                          </Group>
+                        </Stack>
+                      </Table.Td>
+
+                      {/* GST Tax Slab */}
+                      <Table.Td>
+                        <Stack gap={2}>
+                          <Badge variant="light" color="violet" size="sm">
                             {Number(prod.tax_slab)}% GST
                           </Badge>
                           {prod.hsn_code && (
-                            <Text size="10px" c="dimmed" mt={2}>
+                            <Text size="10px" c="dimmed" style={{ fontFamily: 'monospace' }}>
                               HSN: {prod.hsn_code}
                             </Text>
                           )}
-                        </div>
+                        </Stack>
                       </Table.Td>
 
-                      {/* Status */}
+                      {/* Active Status */}
                       <Table.Td>
-                        <Badge
-                          size="sm"
-                          variant="dot"
-                          color={prod.is_active ? 'teal' : 'gray'}
-                        >
+                        <Badge variant="dot" color={prod.is_active ? 'green' : 'gray'} size="sm">
                           {prod.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </Table.Td>
@@ -572,36 +673,61 @@ export function ProductList() {
                               </ActionIcon>
                             </Menu.Target>
                             <Menu.Dropdown>
-                              <Menu.Item
-                                leftSection={<IconEdit size={14} />}
-                                onClick={() => {
-                                  setEditingProduct(prod);
-                                  setDrawerOpened(true);
-                                }}
-                              >
-                                Edit Product
-                              </Menu.Item>
-                              <Menu.Item
-                                leftSection={<IconPrinter size={14} />}
-                                onClick={() => {
-                                  setStickerProduct(prod);
-                                  setStickerModalOpened(true);
-                                }}
-                              >
-                                Print Barcode Sticker
-                              </Menu.Item>
-                              <Menu.Divider />
-                              <Menu.Item
-                                color="red"
-                                leftSection={<IconTrash size={14} />}
-                                onClick={() => {
-                                  if (confirm(`Are you sure you want to delete '${prod.name}'?`)) {
-                                    deleteMutation.mutate(prod.id);
-                                  }
-                                }}
-                              >
-                                Delete
-                              </Menu.Item>
+                              {isOrgAdmin ? (
+                                <>
+                                  <Menu.Item
+                                    leftSection={<IconEdit size={14} />}
+                                    onClick={() => {
+                                      setEditingProduct(prod);
+                                      setDrawerOpened(true);
+                                    }}
+                                  >
+                                    Edit Product
+                                  </Menu.Item>
+                                  <Menu.Item
+                                    leftSection={<IconPrinter size={14} />}
+                                    onClick={() => {
+                                      setStickerProduct(prod);
+                                      setStickerModalOpened(true);
+                                    }}
+                                  >
+                                    Print Barcode Sticker
+                                  </Menu.Item>
+                                  <Menu.Divider />
+                                  <Menu.Item
+                                    color="red"
+                                    leftSection={<IconTrash size={14} />}
+                                    onClick={() => {
+                                      if (confirm(`Are you sure you want to delete '${prod.name}'?`)) {
+                                        deleteMutation.mutate(prod.id);
+                                      }
+                                    }}
+                                  >
+                                    Delete
+                                  </Menu.Item>
+                                </>
+                              ) : (
+                                <>
+                                  <Menu.Item
+                                    leftSection={<IconEye size={14} />}
+                                    onClick={() => {
+                                      setEditingProduct(prod);
+                                      setDrawerOpened(true);
+                                    }}
+                                  >
+                                    View Specifications
+                                  </Menu.Item>
+                                  <Menu.Item
+                                    leftSection={<IconPrinter size={14} />}
+                                    onClick={() => {
+                                      setStickerProduct(prod);
+                                      setStickerModalOpened(true);
+                                    }}
+                                  >
+                                    Print Barcode Sticker
+                                  </Menu.Item>
+                                </>
+                              )}
                             </Menu.Dropdown>
                           </Menu>
                         </Group>
@@ -621,15 +747,21 @@ export function ProductList() {
         onClose={() => setDrawerOpened(false)}
         product={editingProduct}
         defaultOrgId={activeOrgId}
+        isReadOnly={!isOrgAdmin}
       />
 
-      {/* Barcode Thermal Sticker Modal */}
-      <BarcodeStickerModal
-        opened={stickerModalOpened}
-        onClose={() => setStickerModalOpened(false)}
-        product={stickerProduct}
-        storeName={activeOrg?.name || 'STORE MASTER'}
-      />
+      {/* Thermal Barcode Sticker Generator Modal */}
+      {stickerProduct && (
+        <BarcodeStickerModal
+          opened={stickerModalOpened}
+          onClose={() => {
+            setStickerModalOpened(false);
+            setStickerProduct(null);
+          }}
+          product={stickerProduct}
+          storeName={activeOrg?.name || 'RETAIL STORE'}
+        />
+      )}
     </Box>
   );
 }
