@@ -31,6 +31,7 @@ import {
 import { useState, useMemo } from 'react';
 import {
   useCategories,
+  useOrganizationCategories,
   useBrands,
   useCreateProduct,
   useUpdateProduct,
@@ -80,7 +81,29 @@ function ProductDrawerForm({
     product?.organization_id || defaultOrgId || organizations?.[0]?.id || ''
   );
 
-  const { data: categories } = useCategories();
+  const { data: orgCategories, isLoading: orgCatsLoading } = useOrganizationCategories(selectedOrgId || undefined);
+  const { data: platformCategories, isLoading: platformCatsLoading } = useCategories(undefined, selectedOrgId || undefined);
+
+  const mappedCategories = useMemo(() => {
+    if (orgCategories && orgCategories.length > 0) {
+      return orgCategories
+        .filter((oc) => oc.is_active && oc.category)
+        .map((oc) => ({
+          id: oc.category.id,
+          name: oc.category.name,
+        }));
+    }
+    if (platformCategories && platformCategories.length > 0) {
+      return platformCategories
+        .filter((c) => c.is_active)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+        }));
+    }
+    return [];
+  }, [orgCategories, platformCategories]);
+
   const { data: brands } = useBrands(selectedOrgId || undefined);
 
   const createMutation = useCreateProduct();
@@ -125,8 +148,10 @@ function ProductDrawerForm({
   const handleCategoryChange = (val: string | null) => {
     setCategoryId(val);
     setSubcategoryId(null); // Reset subcategory when parent category changes
-    if (val && categories) {
-      const selected = categories.find((c) => c.id === val);
+    if (val) {
+      const selected =
+        orgCategories?.find((oc) => oc.category?.id === val)?.category ||
+        platformCategories?.find((c) => c.id === val);
       if (selected) {
         if (selected.default_hsn_code) setHsnCode(selected.default_hsn_code);
         if (selected.default_tax_slab !== null && selected.default_tax_slab !== undefined) {
@@ -320,13 +345,20 @@ function ProductDrawerForm({
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
           <Select
             label="Category (Platform Master)"
-            placeholder="Select platform category"
-            data={categories?.map((c) => ({ value: c.id, label: c.name })) || []}
+            placeholder={
+              orgCatsLoading || platformCatsLoading
+                ? 'Loading categories...'
+                : mappedCategories.length === 0
+                ? 'No categories mapped to this organization'
+                : 'Select category mapped to org'
+            }
+            data={mappedCategories.map((c) => ({ value: c.id, label: c.name }))}
             value={categoryId}
             onChange={handleCategoryChange}
             clearable={!isReadOnly}
             searchable
             disabled={isReadOnly}
+            nothingFoundMessage="No categories found"
           />
 
           <Select
@@ -578,7 +610,7 @@ function ProductDrawerForm({
           <Text size="xs" c="dimmed">
             Organization-defined subcategory under{' '}
             <Text component="span" fw={700} c="brand">
-              {categories?.find((c) => c.id === categoryId)?.name || 'selected category'}
+              {mappedCategories.find((c) => c.id === categoryId)?.name || 'selected category'}
             </Text>
           </Text>
 

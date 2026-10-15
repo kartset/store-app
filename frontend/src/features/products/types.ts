@@ -26,6 +26,14 @@ export interface Category {
   subcategories?: Category[];
 }
 
+export interface OrganizationCategory {
+  id: string;
+  organization_id: string;
+  category_id: string;
+  category: Category;
+  is_active: boolean;
+}
+
 export interface Subcategory {
   id: string;
   organization_id: string;

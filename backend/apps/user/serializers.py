@@ -173,3 +173,33 @@ class AppTokenObtainPairSerializer(TokenObtainPairSerializer):
         }
 
 
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings
+
+
+class AppTokenRefreshSerializer(TokenRefreshSerializer):
+    """
+    Token refresh serializer that resolves the user from db.models.User (UUID PK)
+    instead of the default integer auth.User model.
+    """
+    def validate(self, attrs):
+        refresh = self.token_class(attrs["refresh"])
+        user_id = refresh[api_settings.USER_ID_CLAIM]
+        try:
+            user = User.objects.get(id=user_id, is_deleted=False)
+        except (User.DoesNotExist, ValueError):
+            raise exceptions.AuthenticationFailed("User not found", "user_not_found")
+        if not user.is_active:
+            raise exceptions.AuthenticationFailed("User is inactive", "user_inactive")
+
+        data = {"access": str(refresh.access_token)}
+        if api_settings.ROTATE_REFRESH_TOKENS:
+            refresh.set_jti()
+            refresh.set_exp()
+            refresh.set_iat()
+            data["refresh"] = str(refresh)
+
+        return data
+
+
+

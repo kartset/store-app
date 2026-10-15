@@ -3,6 +3,7 @@ import { api } from '../../../lib/axios';
 import type {
   Brand,
   Category,
+  OrganizationCategory,
   CreateProductPayload,
   CreateSubcategoryPayload,
   Product,
@@ -38,15 +39,32 @@ export function useProducts(params?: ProductFilterParams) {
   });
 }
 
-export function useCategories(parent?: string | null) {
+export function useCategories(parent?: string | null, organizationId?: string) {
   return useQuery({
-    queryKey: ['categories', parent],
+    queryKey: ['categories', parent, organizationId],
     queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (parent !== undefined) params.parent = parent ?? 'null';
+      if (organizationId) params.organization_id = organizationId;
+
       const response = await api.get<Category[]>('/api/products/categories/', {
-        params: parent !== undefined ? { parent: parent ?? 'null' } : undefined,
+        params: Object.keys(params).length ? params : undefined,
       });
       return response.data;
     },
+  });
+}
+
+export function useOrganizationCategories(organizationId?: string) {
+  return useQuery({
+    queryKey: ['organization-categories', organizationId],
+    queryFn: async () => {
+      const response = await api.get<OrganizationCategory[]>('/api/products/organization-categories/', {
+        params: organizationId ? { organization_id: organizationId } : undefined,
+      });
+      return response.data;
+    },
+    enabled: Boolean(organizationId),
   });
 }
 

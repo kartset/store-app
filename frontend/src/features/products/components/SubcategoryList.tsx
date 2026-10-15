@@ -41,6 +41,7 @@ import { useState, useMemo } from 'react';
 import {
   useSubcategories,
   useCategories,
+  useOrganizationCategories,
   useCreateSubcategory,
   useUpdateSubcategory,
   useDeleteSubcategory,
@@ -69,7 +70,7 @@ export function SubcategoryList() {
   const [formIsActive, setFormIsActive] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Derive active organization
+  // Derive active organization with fallback to user.organizations
   const activeOrgId = useMemo(() => {
     if (selectedOrgId) return selectedOrgId;
     if (organizations && organizations.length > 0) return organizations[0].id;
@@ -79,9 +80,16 @@ export function SubcategoryList() {
         const store = JSON.parse(stored);
         if (store.organization_id) return store.organization_id;
       }
-    } catch {
-      // fallback
-    }
+    } catch {}
+    try {
+      const userStored = localStorage.getItem('user');
+      if (userStored) {
+        const u = JSON.parse(userStored);
+        if (u.organizations && u.organizations.length > 0) {
+          return u.organizations[0].id;
+        }
+      }
+    } catch {}
     return '';
   }, [selectedOrgId, organizations]);
 
@@ -105,8 +113,32 @@ export function SubcategoryList() {
     }
   }, []);
 
-  // Fetch categories & subcategories
-  const { data: categories } = useCategories();
+  // Fetch categories mapped to this organization
+  const { data: orgCategories, isLoading: orgCatsLoading } = useOrganizationCategories(activeOrgId);
+  const { data: platformCategories, isLoading: platformCatsLoading } = useCategories(undefined, activeOrgId);
+
+  // Combined mapped categories for this organization
+  const mappedCategories = useMemo(() => {
+    if (orgCategories && orgCategories.length > 0) {
+      return orgCategories
+        .filter((oc) => oc.is_active && oc.category)
+        .map((oc) => ({
+          id: oc.category.id,
+          name: oc.category.name,
+        }));
+    }
+    if (platformCategories && platformCategories.length > 0) {
+      return platformCategories
+        .filter((c) => c.is_active)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+        }));
+    }
+    return [];
+  }, [orgCategories, platformCategories]);
+
+  // Fetch subcategories
   const {
     data: subcategories,
     isLoading: subcategoriesLoading,
@@ -413,7 +445,7 @@ export function SubcategoryList() {
             {stats.categoriesMapped}
           </Text>
           <Text size="xs" c="dimmed" mt={4}>
-            Covered out of {categories?.length || 0} platform masters
+            Covered out of {mappedCategories.length} mapped categories
           </Text>
         </Card>
       </SimpleGrid>
@@ -445,7 +477,7 @@ export function SubcategoryList() {
               leftSection={<IconTags size={16} />}
               data={[
                 { value: 'all', label: 'All Platform Categories' },
-                ...(categories?.map((c) => ({ value: c.id, label: c.name })) || []),
+                ...mappedCategories.map((c) => ({ value: c.id, label: c.name })),
               ]}
               value={selectedCategoryId}
               onChange={(val) => setSelectedCategoryId(val || 'all')}
@@ -521,7 +553,7 @@ export function SubcategoryList() {
               <Table.Tbody>
                 {filteredSubcategories.map((sub) => {
                   const parentCategory =
-                    sub.category || categories?.find((c) => c.id === sub.category_id);
+                    sub.category || mappedCategories.find((c) => c.id === sub.category_id);
                   return (
                     <Table.Tr key={sub.id}>
                       {/* Display Order */}
@@ -640,12 +672,19 @@ export function SubcategoryList() {
 
             <Select
               label="Parent Platform Category"
-              placeholder="Select parent category"
-              data={categories?.map((c) => ({ value: c.id, label: c.name })) || []}
+              placeholder={
+                orgCatsLoading || platformCatsLoading
+                  ? 'Loading mapped categories...'
+                  : mappedCategories.length === 0
+                  ? 'No categories mapped to this organization'
+                  : 'Select category mapped to org'
+              }
+              data={mappedCategories.map((c) => ({ value: c.id, label: c.name }))}
               value={formCategoryId}
               onChange={setFormCategoryId}
               required
               searchable
+              nothingFoundMessage="No categories mapped to organization"
             />
 
             <TextInput
