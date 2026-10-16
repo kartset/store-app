@@ -77,5 +77,85 @@ class InventorySerializer(BaseModelSerializer):
             'product',
             'vendor',
         )
+class StockAdjustmentRequestSerializer(serializers.Serializer):
+    """Payload validator for manual or operational stock adjustments."""
+    quantity_delta = serializers.IntegerField(
+        required=True,
+        help_text="Positive integer to add stock, negative to deduct stock."
+    )
+    movement_type = serializers.CharField(
+        max_length=30,
+        required=True,
+        help_text="StockMovementType choice (e.g. POS_SALE, DAMAGE_WASTE, AUDIT_ADJUSTMENT)."
+    )
+    reason = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+        default=''
+    )
+    reference_id = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        default=''
+    )
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default=''
+    )
+    allow_negative = serializers.BooleanField(
+        required=False,
+        default=False
+    )
+
+    def validate_quantity_delta(self, value):
+        if value == 0:
+            raise serializers.ValidationError("Quantity delta cannot be zero.")
+        return value
 
 
+class ReceiveGoodsItemSerializer(serializers.Serializer):
+    """Single item entry for GRN receipt."""
+    product_id = serializers.UUIDField(required=True)
+    quantity = serializers.IntegerField(min_value=1, required=True)
+    store_price = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        allow_null=True
+    )
+    batch_number = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        allow_null=True
+    )
+
+
+class ReceiveGoodsRequestSerializer(serializers.Serializer):
+    """Payload validator for receiving bulk Goods Receipt Note (GRN) from vendors."""
+    store_id = serializers.UUIDField(required=True)
+    vendor_id = serializers.UUIDField(required=False, allow_null=True)
+    reference_id = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        default=''
+    )
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default=''
+    )
+    items = ReceiveGoodsItemSerializer(many=True, allow_empty=False)
+
+
+class InventorySummarySerializer(serializers.Serializer):
+    """Aggregated store inventory KPIs for dashboards and header statistics."""
+    total_products = serializers.IntegerField()
+    total_units_in_stock = serializers.IntegerField()
+    low_stock_count = serializers.IntegerField()
+    out_of_stock_count = serializers.IntegerField()
+    total_inventory_value = serializers.DecimalField(max_digits=14, decimal_places=2)
