@@ -17,6 +17,7 @@ import {
   Box,
   Divider,
   Modal,
+  Loader,
 } from '@mantine/core';
 import {
   IconPackage,
@@ -28,9 +29,10 @@ import {
   IconFolderPlus,
   IconEye,
   IconWorld,
+  IconWorldCheck,
   IconCheck,
 } from '@tabler/icons-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   useCategories,
   useOrganizationCategories,
@@ -152,6 +154,41 @@ function ProductDrawerForm({
   const [globalCatalogueMatch, setGlobalCatalogueMatch] = useState<CatalogueItem | null>(null);
   const [catalogueLookupLoading, setCatalogueLookupLoading] = useState(false);
   const [catalogueLookupMsg, setCatalogueLookupMsg] = useState<string | null>(null);
+
+  // Auto-detect & verify barcode against Global Product Register
+  useEffect(() => {
+    const trimmed = barcode.trim();
+    if (!trimmed || trimmed.length < 5) return;
+
+    let isMounted = true;
+    const timer = setTimeout(async () => {
+      try {
+        const match = await lookupGlobalCatalogue(trimmed);
+        if (!isMounted) return;
+        if (match) {
+          setGlobalCatalogueMatch(match);
+          setCatalogueLookupMsg(null);
+        } else {
+          setGlobalCatalogueMatch(null);
+          setCatalogueLookupMsg('Unregistered barcode. Will be saved as an organization-specific product.');
+        }
+      } catch {
+        if (isMounted) {
+          setGlobalCatalogueMatch(null);
+          setCatalogueLookupMsg(null);
+        }
+      } finally {
+        if (isMounted) {
+          setCatalogueLookupLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [barcode]);
 
   const handleLookupGlobalCatalogue = async () => {
     if (!barcode.trim()) return;
@@ -444,24 +481,35 @@ function ProductDrawerForm({
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
           <TextInput
             label="Manufacturer Barcode (Global)"
-            description="EAN-13, UPC from manufacturer packaging"
-            placeholder="e.g. 8901262010099"
+            description="Auto-checks Global Product Register on scan or input"
+            placeholder="e.g. 8901764012297"
             value={barcode}
             onChange={(e) => {
-              setBarcode(e.currentTarget.value);
-              setGlobalCatalogueMatch(null);
-              setCatalogueLookupMsg(null);
+              const val = e.currentTarget.value;
+              setBarcode(val);
+              if (val.trim().length < 5) {
+                setGlobalCatalogueMatch(null);
+                setCatalogueLookupMsg(null);
+                setCatalogueLookupLoading(false);
+              } else {
+                setCatalogueLookupLoading(true);
+              }
             }}
             leftSection={<IconBarcode size={16} />}
             disabled={isReadOnly}
             rightSection={
-              !isReadOnly && barcode.trim() ? (
+              catalogueLookupLoading ? (
+                <Loader size="xs" color="indigo" />
+              ) : globalCatalogueMatch ? (
+                <Tooltip label="Verified in Global Product Register">
+                  <IconWorldCheck size={18} color="var(--mantine-color-teal-6)" />
+                </Tooltip>
+              ) : !isReadOnly && barcode.trim() ? (
                 <Tooltip label="Lookup in Global Catalogue">
                   <ActionIcon
-                    variant="light"
+                    variant="subtle"
                     size="sm"
-                    color="indigo"
-                    loading={catalogueLookupLoading}
+                    color="gray"
                     onClick={handleLookupGlobalCatalogue}
                   >
                     <IconWorld size={14} />
@@ -491,41 +539,77 @@ function ProductDrawerForm({
           />
         </SimpleGrid>
 
-
         {globalCatalogueMatch && (
           <Alert
-            icon={<IconSparkles size={16} />}
+            icon={<IconSparkles size={18} />}
             color="indigo"
             radius="md"
-            title={`Global Product Matched: "${globalCatalogueMatch.name}"`}
+            title={
+              <Group gap="xs">
+                <Text fw={600}>Global Product Matched:</Text>
+                {globalCatalogueMatch.brand_name && (
+                  <Badge variant="filled" color="indigo" size="sm">
+                    {globalCatalogueMatch.brand_name}
+                  </Badge>
+                )}
+                <Text fw={600}>"{globalCatalogueMatch.name}"</Text>
+              </Group>
+            }
           >
-            <Group justify="space-between" align="center" wrap="wrap" gap="xs">
-              <Text size="xs">
-                HSN: {globalCatalogueMatch.hsn_code || 'N/A'} &bull; Tax: {globalCatalogueMatch.tax_slab}% &bull; Suggested MRP: ₹{globalCatalogueMatch.suggested_mrp || '0.00'} &bull; UOM: {globalCatalogueMatch.uom}
-              </Text>
-              <Button
-                size="xs"
-                variant="light"
-                color="indigo"
-                leftSection={<IconCheck size={14} />}
-                onClick={() => {
-                  setName(globalCatalogueMatch.name);
-                  if (globalCatalogueMatch.hsn_code) setHsnCode(globalCatalogueMatch.hsn_code);
-                  if (globalCatalogueMatch.tax_slab) setTaxSlab(Number(globalCatalogueMatch.tax_slab));
-                  if (globalCatalogueMatch.uom) setUom(globalCatalogueMatch.uom);
-                  if (globalCatalogueMatch.suggested_mrp) setBaseMrp(Number(globalCatalogueMatch.suggested_mrp));
-                }}
-              >
-                Auto-fill Form Details
-              </Button>
-            </Group>
+            <Stack gap="xs">
+              <Group justify="space-between" align="center" wrap="wrap" gap="xs">
+                <Group gap="xs">
+                  <Badge variant="outline" color="gray" size="xs">
+                    HSN: {globalCatalogueMatch.hsn_code || 'N/A'}
+                  </Badge>
+                  <Badge variant="outline" color="blue" size="xs">
+                    GST: {globalCatalogueMatch.tax_slab}%
+                  </Badge>
+                  <Badge variant="outline" color="teal" size="xs">
+                    Suggested MRP: ₹{globalCatalogueMatch.suggested_mrp || '0.00'}
+                  </Badge>
+                  <Badge variant="outline" color="grape" size="xs">
+                    UOM: {globalCatalogueMatch.uom}
+                  </Badge>
+                </Group>
+                <Button
+                  size="xs"
+                  variant="filled"
+                  color="indigo"
+                  leftSection={<IconCheck size={14} />}
+                  onClick={() => {
+                    setName(globalCatalogueMatch.name);
+                    if (globalCatalogueMatch.hsn_code) setHsnCode(globalCatalogueMatch.hsn_code);
+                    if (globalCatalogueMatch.tax_slab) setTaxSlab(Number(globalCatalogueMatch.tax_slab));
+                    if (globalCatalogueMatch.uom) setUom(globalCatalogueMatch.uom);
+                    if (globalCatalogueMatch.suggested_mrp) setBaseMrp(Number(globalCatalogueMatch.suggested_mrp));
+                    if (globalCatalogueMatch.description && !description) {
+                      setDescription(globalCatalogueMatch.description);
+                    }
+                    if (globalCatalogueMatch.brand_name && brands) {
+                      const matchedBrand = brands.find(
+                        (b) => b.name.toLowerCase() === globalCatalogueMatch.brand_name?.toLowerCase()
+                      );
+                      if (matchedBrand) setBrandId(matchedBrand.id);
+                    }
+                  }}
+                >
+                  Auto-fill Product Details
+                </Button>
+              </Group>
+            </Stack>
           </Alert>
         )}
 
-        {catalogueLookupMsg && (
-          <Text size="xs" c="dimmed">
-            {catalogueLookupMsg}
-          </Text>
+        {catalogueLookupMsg && !globalCatalogueMatch && barcode.trim().length >= 5 && (
+          <Group gap="xs" mt={-4}>
+            <Badge variant="outline" color="gray" size="sm">
+              Custom Product
+            </Badge>
+            <Text size="xs" c="dimmed">
+              {catalogueLookupMsg}
+            </Text>
+          </Group>
         )}
 
         <Divider label="Tax & Commercial Pricing" labelPosition="left" />

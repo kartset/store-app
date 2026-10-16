@@ -5,6 +5,7 @@ from rest_framework import serializers
 from apps.organisation.serializers import OrganizationSerializer
 from db.models import (
     Brand,
+    CatalogueItem,
     Category,
     OrganizationCategory,
     Product,
@@ -296,5 +297,11 @@ class ProductSerializer(BaseModelSerializer):
             target_cat_id = category.id if hasattr(category, 'id') else category
             if sub_cat_id != target_cat_id:
                 raise serializers.ValidationError({'subcategory_id': 'Selected subcategory does not belong to the selected category.'})
+
+        # Auto-link to Global Product Register (CatalogueItem) by manufacturer barcode if not explicitly specified
+        if not attrs.get('catalogue_item_id') and barcode:
+            match = CatalogueItem.objects.filter(barcode=barcode, is_deleted=False).first()
+            if match:
+                attrs['catalogue_item_id'] = match
 
         return attrs
