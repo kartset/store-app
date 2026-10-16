@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
-import type { CreateVendorInput, UpdateVendorInput, Vendor, VendorFilterParams } from '../types';
+import type {
+  CreateVendorInput,
+  CreateVendorProductInput,
+  UpdateVendorInput,
+  UpdateVendorProductInput,
+  Vendor,
+  VendorFilterParams,
+  VendorProduct,
+  VendorProductFilterParams,
+} from '../types';
 
 export function useVendors(params?: VendorFilterParams) {
   return useQuery({
@@ -72,6 +81,77 @@ export function useDeleteVendor() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
+    },
+  });
+}
+
+// ==========================================
+// Vendor-Product Procurement Catalog Hooks
+// ==========================================
+
+export function useVendorProducts(params?: VendorProductFilterParams) {
+  return useQuery({
+    queryKey: ['vendor-products', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = {};
+      if (params?.vendor_id) queryParams.vendor_id = params.vendor_id;
+      if (params?.product_id) queryParams.product_id = params.product_id;
+      if (params?.organization_id) queryParams.organization_id = params.organization_id;
+      if (params?.is_primary_supplier !== undefined) {
+        queryParams.is_primary_supplier = String(params.is_primary_supplier);
+      }
+      if (params?.is_active !== undefined) {
+        queryParams.is_active = String(params.is_active);
+      }
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<VendorProduct[] | { results: VendorProduct[] }>(
+        '/api/vendors/products/',
+        { params: queryParams }
+      );
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return response.data.results || [];
+    },
+  });
+}
+
+export function useCreateVendorProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: CreateVendorProductInput) => {
+      const response = await api.post<VendorProduct>('/api/vendors/products/', payload);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-products'] });
+    },
+  });
+}
+
+export function useUpdateVendorProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: UpdateVendorProductInput }) => {
+      const response = await api.patch<VendorProduct>(`/api/vendors/products/${id}/`, data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-products'] });
+    },
+  });
+}
+
+export function useDeleteVendorProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/api/vendors/products/${id}/`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-products'] });
     },
   });
 }

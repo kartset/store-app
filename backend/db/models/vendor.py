@@ -136,3 +136,60 @@ class Vendor(BaseModel):
         if self.trade_name and self.trade_name != self.name:
             return f"{self.name} ({self.trade_name})"
         return self.name
+
+
+class VendorProduct(BaseModel):
+    vendor_id = models.ForeignKey(
+        'db.Vendor',
+        on_delete=models.CASCADE,
+        related_name='vendor_products'
+    )
+    product_id = models.ForeignKey(
+        'db.Product',
+        on_delete=models.CASCADE,
+        related_name='product_vendors'
+    )
+    vendor_sku = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Supplier's internal catalog code or SKU"
+    )
+    negotiated_cost_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Agreed procurement cost price per unit"
+    )
+    minimum_order_quantity = models.IntegerField(
+        default=1,
+        help_text="Minimum procurement quantity (MOQ) per purchase order"
+    )
+    lead_time_days = models.IntegerField(
+        default=3,
+        help_text="Expected delivery lead time in days"
+    )
+    is_primary_supplier = models.BooleanField(
+        default=False,
+        help_text="Indicates primary/default vendor for automated replenishment"
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['vendor_id', 'product_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['vendor_id', 'product_id'],
+                condition=models.Q(is_deleted=False),
+                name='unique_vendor_product_mapping'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['is_deleted']),
+            models.Index(fields=['vendor_id', 'is_active']),
+            models.Index(fields=['product_id', 'is_active']),
+            models.Index(fields=['vendor_id', 'is_primary_supplier']),
+        ]
+
+    def __str__(self):
+        return f"{self.vendor_id.name} -> {self.product_id.name} (₹{self.negotiated_cost_price})"
+

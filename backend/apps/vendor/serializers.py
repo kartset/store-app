@@ -3,7 +3,7 @@ import re
 from rest_framework import serializers
 
 from apps.organisation.serializers import OrganizationSerializer
-from db.models import Vendor
+from db.models import Vendor, VendorProduct
 from utils.serializers import BaseModelSerializer
 
 GSTIN_REGEX = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$')
@@ -108,5 +108,102 @@ class VendorSerializer(BaseModelSerializer):
                 raise serializers.ValidationError({
                     'vendor_code': f"Vendor code '{vendor_code}' already exists in this organization."
                 })
+
+        return attrs
+
+
+class VendorProductSerializer(BaseModelSerializer):
+    vendor = serializers.SerializerMethodField(read_only=True)
+    product = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = VendorProduct
+        fields = (
+            'id',
+            'created_at',
+            'updated_at',
+            'deleted_at',
+            'created_by',
+            'updated_by',
+            'deleted_by',
+            'is_deleted',
+            'vendor_id',
+            'product_id',
+            'vendor',
+            'product',
+            'vendor_sku',
+            'negotiated_cost_price',
+            'minimum_order_quantity',
+            'lead_time_days',
+            'is_primary_supplier',
+            'is_active',
+        )
+
+    def get_vendor(self, obj):
+        v = obj.vendor_id
+        if not v:
+            return None
+        return {
+            'id': str(v.id),
+            'name': v.name,
+            'trade_name': v.trade_name,
+            'vendor_code': v.vendor_code,
+            'gstin': v.gstin,
+            'phone': v.phone,
+        }
+
+    def get_product(self, obj):
+        p = obj.product_id
+        if not p:
+            return None
+        return {
+            'id': str(p.id),
+            'name': p.name,
+            'sku': p.sku,
+            'barcode': p.barcode,
+            'base_mrp': str(p.base_mrp) if p.base_mrp is not None else None,
+        }
+
+    def validate_negotiated_cost_price(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Negotiated cost price must be strictly greater than zero.")
+        return value
+
+    def validate_minimum_order_quantity(self, value):
+        if value < 1:
+            raise serializers.ValidationError("Minimum order quantity must be at least 1.")
+        return value
+
+    def validate_lead_time_days(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Lead time days cannot be negative.")
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        vendor = attrs.get('vendor_id') or (self.instance.vendor_id if self.instance else None)
+        product = attrs.get('product_id') or (self.instance.product_id if self.instance else None)
+
+        if vendor and product:
+            # Multi-tenancy guard: Ensure vendor and product belong to the exact same organization
+            if vendor.organization_id_id != product.organization_id_id:
+                raise serializers.ValidationError(
+                    "Cross-organization mapping forbidden: Product and Vendor must belong to the same organization."
+                )
+
+            # Uniqueness check
+            qs = VendorProduct.objects.filter(
+                vendor_id=vendor,
+                product_id=product,
+                is_deleted=False
+            )
+            if self.instance:
+                qs = qs.exclude(id=self.instance.id)
+
+            if qs.exists():
+                raise serializers.ValidationError(
+                    "This product is already mapped to the specified vendor."
+                )
 
         return attrs

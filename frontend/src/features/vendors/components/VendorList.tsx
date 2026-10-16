@@ -35,15 +35,19 @@ import {
   IconMail,
   IconCreditCard,
   IconReceiptTax,
-  IconTruckDelivery,
   IconAlertCircle,
+  IconPackage,
+  IconTruckDelivery,
 } from '@tabler/icons-react';
+
 import { useState, useMemo } from 'react';
 import { useOrganizations } from '../../organizations/api';
 import { useVendors, useDeleteVendor } from '../api';
 import { VendorDrawer } from './VendorDrawer';
+import { VendorProductCatalogModal } from './VendorProductCatalogModal';
 import {
   GST_STATE_CODE_MAP,
+
   type PaymentTerms,
   type Vendor,
 } from '../types';
@@ -66,7 +70,12 @@ export function VendorList() {
   const [vendorToDelete, setVendorToDelete] = useState<Vendor | null>(null);
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
 
+  // Vendor Catalog Modal State
+  const [catalogModalOpened, setCatalogModalOpened] = useState(false);
+  const [catalogVendor, setCatalogVendor] = useState<Vendor | null>(null);
+
   // Pagination state
+
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
@@ -513,7 +522,17 @@ export function VendorList() {
                             <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => handleOpenEdit(vendor)}>
                               Edit Vendor
                             </Menu.Item>
+                            <Menu.Item
+                              leftSection={<IconPackage size={14} />}
+                              onClick={() => {
+                                setCatalogVendor(vendor);
+                                setCatalogModalOpened(true);
+                              }}
+                            >
+                              Catalog & Pricing
+                            </Menu.Item>
                             <Menu.Divider />
+
                             <Menu.Item
                               color="red"
                               leftSection={<IconTrash size={14} />}
@@ -555,6 +574,14 @@ export function VendorList() {
         defaultOrgId={activeOrgId}
         isReadOnly={isReadOnly}
       />
+
+      {/* Vendor Product Catalog Modal */}
+      <VendorProductCatalogModal
+        opened={catalogModalOpened}
+        onClose={() => setCatalogModalOpened(false)}
+        vendor={catalogVendor}
+      />
+
 
       {/* Delete Confirmation Modal */}
       <Modal
