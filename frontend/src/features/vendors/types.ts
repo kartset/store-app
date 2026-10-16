@@ -74,6 +74,62 @@ export interface CreateVendorInput {
 
 export type UpdateVendorInput = Partial<CreateVendorInput>;
 
+export interface VendorProduct {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  deleted_by?: string | null;
+  is_deleted: boolean;
+  vendor_id: string;
+  product_id: string;
+  vendor?: {
+    id: string;
+    name: string;
+    trade_name?: string | null;
+    vendor_code?: string | null;
+    gstin?: string | null;
+    phone?: string | null;
+  } | null;
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+    barcode?: string | null;
+    base_mrp?: string | null;
+  } | null;
+  vendor_sku?: string | null;
+  negotiated_cost_price: string | number;
+  minimum_order_quantity: number;
+  lead_time_days: number;
+  is_primary_supplier: boolean;
+  is_active: boolean;
+}
+
+export interface CreateVendorProductInput {
+  vendor_id: string;
+  product_id: string;
+  vendor_sku?: string;
+  negotiated_cost_price: string | number;
+  minimum_order_quantity?: number;
+  lead_time_days?: number;
+  is_primary_supplier?: boolean;
+  is_active?: boolean;
+}
+
+export type UpdateVendorProductInput = Partial<CreateVendorProductInput>;
+
+export interface VendorProductFilterParams {
+  vendor_id?: string;
+  product_id?: string;
+  organization_id?: string;
+  is_primary_supplier?: boolean;
+  is_active?: boolean;
+  search?: string;
+}
+
 export interface VendorFilterParams {
   organization_id?: string;
   is_active?: boolean;
@@ -81,6 +137,7 @@ export interface VendorFilterParams {
   state_code?: string;
   search?: string;
 }
+
 
 export const PAYMENT_TERM_OPTIONS: { value: PaymentTerms; label: string; description: string }[] = [
   { value: 'COD', label: 'Cash On Delivery (COD)', description: 'Payment settled upon physical delivery' },

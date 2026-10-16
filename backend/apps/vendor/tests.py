@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from db.models import Organization, User, Vendor
+from db.models import Organization, Product, User, Vendor, VendorProduct
 
 
 class VendorAPITests(TestCase):
@@ -249,5 +249,189 @@ class VendorAPITests(TestCase):
         results = self._extract_results(list_res.data)
         vendor_ids = [v['id'] for v in results]
         self.assertNotIn(str(vendor.id), vendor_ids)
+
+
+class VendorProductAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email="vp_test@example.com",
+            password="testpassword123",
+            first_name="VendorProduct",
+            last_name="Tester"
+        )
+        self.client.force_authenticate(user=self.user)
+
+        self.org1 = Organization.objects.create(name="Org One Retail", subdomain="org-vp-one", created_by=self.user)
+        self.org2 = Organization.objects.create(name="Org Two Retail", subdomain="org-vp-two", created_by=self.user)
+
+        self.vendor1 = Vendor.objects.create(
+            organization_id=self.org1,
+            name="Unilever Dist",
+            vendor_code="VEND-UNI-01",
+            created_by=self.user
+        )
+        self.vendor2 = Vendor.objects.create(
+            organization_id=self.org2,
+            name="Org2 Vendor",
+            vendor_code="VEND-ORG2-01",
+            created_by=self.user
+        )
+
+        self.product1 = Product.objects.create(
+            organization_id=self.org1,
+            name="Lux Rose Soap 100g",
+            sku="SKU-LUX-ROSE",
+            barcode="8901030000001",
+            base_mrp=Decimal("45.00"),
+            cost_price=Decimal("35.00"),
+            created_by=self.user
+        )
+        self.product2 = Product.objects.create(
+            organization_id=self.org1,
+            name="Lifebuoy Total 100g",
+            sku="SKU-LIFEBUOY-100",
+            barcode="8901030000002",
+            base_mrp=Decimal("35.00"),
+            cost_price=Decimal("28.00"),
+            created_by=self.user
+        )
+        self.product_org2 = Product.objects.create(
+            organization_id=self.org2,
+            name="Org2 Product",
+            sku="SKU-ORG2-P1",
+            base_mrp=Decimal("100.00"),
+            cost_price=Decimal("80.00"),
+            created_by=self.user
+        )
+
+    @staticmethod
+    def _extract_results(response_data):
+        return response_data['results'] if isinstance(response_data, dict) else response_data
+
+    def test_create_vendor_product_mapping(self):
+        url = reverse('vendor-product-list')
+        payload = {
+            'vendor_id': str(self.vendor1.id),
+            'product_id': str(self.product1.id),
+            'vendor_sku': 'HUL-LUX-100',
+            'negotiated_cost_price': '32.50',
+            'minimum_order_quantity': 24,
+            'lead_time_days': 2,
+            'is_primary_supplier': True,
+        }
+        res = self.client.post(url, payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['vendor_sku'], 'HUL-LUX-100')
+        self.assertEqual(Decimal(res.data['negotiated_cost_price']), Decimal('32.50'))
+        self.assertEqual(res.data['minimum_order_quantity'], 24)
+        self.assertTrue(res.data['is_primary_supplier'])
+        self.assertIsNotNone(res.data['vendor'])
+        self.assertEqual(res.data['vendor']['name'], 'Unilever Dist')
+        self.assertIsNotNone(res.data['product'])
+        self.assertEqual(res.data['product']['name'], 'Lux Rose Soap 100g')
+
+    def test_duplicate_vendor_product_rejected(self):
+        VendorProduct.objects.create(
+            vendor_id=self.vendor1,
+            product_id=self.product1,
+            negotiated_cost_price=Decimal('32.50'),
+            created_by=self.user
+        )
+        url = reverse('vendor-product-list')
+        payload = {
+            'vendor_id': str(self.vendor1.id),
+            'product_id': str(self.product1.id),
+            'negotiated_cost_price': '33.00',
+        }
+        res = self.client.post(url, payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cross_organization_mapping_rejected(self):
+        # vendor1 is in org1, product_org2 is in org2
+        url = reverse('vendor-product-list')
+        payload = {
+            'vendor_id': str(self.vendor1.id),
+            'product_id': str(self.product_org2.id),
+            'negotiated_cost_price': '50.00',
+        }
+        res = self.client.post(url, payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('non_field_errors', res.data)
+
+    def test_validation_cost_price_and_moq(self):
+        url = reverse('vendor-product-list')
+        # Non-positive cost price
+        payload_bad_price = {
+            'vendor_id': str(self.vendor1.id),
+            'product_id': str(self.product1.id),
+            'negotiated_cost_price': '0.00',
+        }
+        res = self.client.post(url, payload_bad_price, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Zero MOQ
+        payload_bad_moq = {
+            'vendor_id': str(self.vendor1.id),
+            'product_id': str(self.product1.id),
+            'negotiated_cost_price': '30.00',
+            'minimum_order_quantity': 0,
+        }
+        res = self.client.post(url, payload_bad_moq, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_filter_and_search_vendor_products(self):
+        vp1 = VendorProduct.objects.create(
+            vendor_id=self.vendor1,
+            product_id=self.product1,
+            vendor_sku='V-LUX-01',
+            negotiated_cost_price=Decimal('32.00'),
+            is_primary_supplier=True,
+            created_by=self.user
+        )
+        vp2 = VendorProduct.objects.create(
+            vendor_id=self.vendor1,
+            product_id=self.product2,
+            vendor_sku='V-LIFE-02',
+            negotiated_cost_price=Decimal('26.00'),
+            is_primary_supplier=False,
+            created_by=self.user
+        )
+
+        url = reverse('vendor-product-list')
+
+        # Filter by product_id
+        res = self.client.get(url, {'product_id': str(self.product1.id)})
+        results = self._extract_results(res.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['id'], str(vp1.id))
+
+        # Filter by is_primary_supplier=true
+        res = self.client.get(url, {'vendor_id': str(self.vendor1.id), 'is_primary_supplier': 'true'})
+        results = self._extract_results(res.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['id'], str(vp1.id))
+
+        # Search by product name
+        res = self.client.get(url, {'vendor_id': str(self.vendor1.id), 'search': 'Lifebuoy'})
+        results = self._extract_results(res.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['id'], str(vp2.id))
+
+    def test_soft_delete_vendor_product(self):
+        vp = VendorProduct.objects.create(
+            vendor_id=self.vendor1,
+            product_id=self.product1,
+            negotiated_cost_price=Decimal('32.00'),
+            created_by=self.user
+        )
+        url = reverse('vendor-product-detail', args=[str(vp.id)])
+        res = self.client.delete(url)
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+
+        vp.refresh_from_db()
+        self.assertTrue(vp.is_deleted)
+        self.assertIsNotNone(vp.deleted_at)
+
 
 

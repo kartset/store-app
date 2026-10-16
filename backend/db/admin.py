@@ -24,6 +24,7 @@ from .models import (
     Subcategory,
     User,
     Vendor,
+    VendorProduct,
 )
 
 
@@ -277,6 +278,23 @@ class VendorAdmin(BaseModelAdmin):
     list_display = ('name', 'trade_name', 'vendor_code', 'organization_id', 'gstin', 'phone', 'payment_terms', 'is_active')
     search_fields = ('name', 'trade_name', 'vendor_code', 'gstin', 'pan_number', 'phone', 'email', 'organization_id__name')
     list_filter = ('organization_id', 'payment_terms', 'is_active', 'is_deleted')
+
+
+@admin.register(VendorProduct)
+class VendorProductAdmin(BaseModelAdmin):
+    list_display = (
+        'vendor_id',
+        'product_id',
+        'vendor_sku',
+        'negotiated_cost_price',
+        'minimum_order_quantity',
+        'lead_time_days',
+        'is_primary_supplier',
+        'is_active',
+    )
+    search_fields = ('vendor_id__name', 'product_id__name', 'product_id__sku', 'vendor_sku')
+    list_filter = ('is_primary_supplier', 'is_active', 'is_deleted')
+
 
 
 
