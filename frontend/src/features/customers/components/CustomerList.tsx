@@ -20,6 +20,8 @@ import {
   CopyButton,
   Pagination,
   Avatar,
+  Paper,
+  Divider,
 } from '@mantine/core';
 import {
   IconUsers,
@@ -40,11 +42,13 @@ import {
   IconUserCheck,
   IconMapPin,
   IconX,
+  IconReceipt,
 } from '@tabler/icons-react';
 import { useState, useMemo } from 'react';
 import { useCustomers, useDeleteCustomer } from '../api';
 import { CustomerDrawer } from './CustomerDrawer';
 import { Customer360Drawer } from './Customer360Drawer';
+import { POSCustomerLookup } from './POSCustomerLookup';
 import type { Customer, CustomerType } from '../types';
 
 export function CustomerList() {
@@ -65,6 +69,12 @@ export function CustomerList() {
   // Delete Confirmation Modal State
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
+
+  // POS Checkout Simulator State
+  const [posModalOpened, setPosModalOpened] = useState(false);
+  const [demoCustomer, setDemoCustomer] = useState<Customer | null>(null);
+  const [demoDiscount, setDemoDiscount] = useState<number>(0);
+  const [demoCheckoutSuccess, setDemoCheckoutSuccess] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -149,16 +159,35 @@ export function CustomerList() {
           </Text>
         </div>
 
-        <Button
-          color="brand"
-          leftSection={<IconPlus size={18} />}
-          onClick={handleOpenCreate}
-          size="md"
-          radius="md"
-          style={{ boxShadow: 'var(--shadow-sm)', fontWeight: 600 }}
-        >
-          Add Customer
-        </Button>
+        <Group gap="sm">
+          <Button
+            variant="light"
+            color="brand"
+            leftSection={<IconReceipt size={18} />}
+            onClick={() => {
+              setDemoCustomer(null);
+              setDemoDiscount(0);
+              setDemoCheckoutSuccess(false);
+              setPosModalOpened(true);
+            }}
+            size="md"
+            radius="md"
+            style={{ fontWeight: 600 }}
+          >
+            POS Counter Lookup
+          </Button>
+
+          <Button
+            color="brand"
+            leftSection={<IconPlus size={18} />}
+            onClick={handleOpenCreate}
+            size="md"
+            radius="md"
+            style={{ boxShadow: 'var(--shadow-sm)', fontWeight: 600 }}
+          >
+            Add Customer
+          </Button>
+        </Group>
       </Group>
 
       {/* Metrics Summary Cards */}
@@ -645,6 +674,122 @@ export function CustomerList() {
               leftSection={<IconTrash size={16} />}
             >
               Confirm Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* POS Checkout Counter Simulator Modal */}
+      <Modal
+        opened={posModalOpened}
+        onClose={() => setPosModalOpened(false)}
+        title={
+          <Group gap="xs">
+            <ThemeIcon size={28} radius="md" color="brand" variant="light">
+              <IconReceipt size={16} />
+            </ThemeIcon>
+            <div>
+              <Text fw={700} size="md">
+                POS Counter Checkout Simulator
+              </Text>
+              <Text size="xs" c="dimmed">
+                Test fast phone lookup, quick registration, and loyalty point redemption at counter
+              </Text>
+            </div>
+          </Group>
+        }
+        size="lg"
+        centered
+        radius="md"
+      >
+        <Stack gap="md">
+          {/* Embedded Reusable POS Component */}
+          <POSCustomerLookup
+            billTotal={1850.0}
+            selectedCustomer={demoCustomer}
+            onSelectCustomer={(cust) => {
+              setDemoCustomer(cust);
+              setDemoCheckoutSuccess(false);
+            }}
+            onLoyaltyDiscountChange={(disc) => setDemoDiscount(disc)}
+          />
+
+          {/* Simulated Cart Items Breakdown */}
+          <Paper p="sm" radius="md" withBorder style={{ backgroundColor: 'var(--bg-subtle)' }}>
+            <Stack gap="xs">
+              <Text size="xs" fw={700} c="dimmed" style={{ textTransform: 'uppercase' }}>
+                Simulated Counter Basket (4 items)
+              </Text>
+              <Group justify="space-between">
+                <Text size="xs">Organic Basmati Rice 5kg</Text>
+                <Text size="xs" fw={600}>₹650.00</Text>
+              </Group>
+              <Group justify="space-between">
+                <Text size="xs">Cold Pressed Mustard Oil 1L</Text>
+                <Text size="xs" fw={600}>₹280.00</Text>
+              </Group>
+              <Group justify="space-between">
+                <Text size="xs">Himalayan Pink Salt 1kg</Text>
+                <Text size="xs" fw={600}>₹120.00</Text>
+              </Group>
+              <Group justify="space-between">
+                <Text size="xs">A2 Desi Cow Ghee 500ml</Text>
+                <Text size="xs" fw={600}>₹800.00</Text>
+              </Group>
+
+              <Divider my={4} />
+
+              <Group justify="space-between">
+                <Text size="xs" c="dimmed">Gross Subtotal</Text>
+                <Text size="xs">₹1,850.00</Text>
+              </Group>
+              {demoDiscount > 0 && (
+                <Group justify="space-between">
+                  <Text size="xs" c="green.7" fw={600}>
+                    Loyalty Points Redemption
+                  </Text>
+                  <Text size="xs" c="green.7" fw={700}>
+                    -₹{demoDiscount.toFixed(2)}
+                  </Text>
+                </Group>
+              )}
+              <Group justify="space-between">
+                <Text size="sm" fw={800}>Net Payable</Text>
+                <Text size="md" fw={800} c="brand.8">
+                  ₹{(1850.0 - demoDiscount).toFixed(2)}
+                </Text>
+              </Group>
+            </Stack>
+          </Paper>
+
+          {demoCheckoutSuccess && (
+            <Paper p="sm" radius="md" withBorder style={{ backgroundColor: '#e6fcf5', borderColor: '#63e6be' }}>
+              <Group gap="xs">
+                <ThemeIcon size={24} radius="xl" color="teal">
+                  <IconCheck size={14} />
+                </ThemeIcon>
+                <div>
+                  <Text size="xs" fw={700} c="teal.9">
+                    Simulated Sale Completed Successfully!
+                  </Text>
+                  <Text size="11px" c="teal.8">
+                    Invoice generated for {demoCustomer ? demoCustomer.name || demoCustomer.mobile_number : 'Walk-in Customer'}. Accrued 18 new loyalty points.
+                  </Text>
+                </div>
+              </Group>
+            </Paper>
+          )}
+
+          <Group justify="flex-end" mt="xs">
+            <Button variant="default" onClick={() => setPosModalOpened(false)}>
+              Close Simulator
+            </Button>
+            <Button
+              color="brand"
+              onClick={() => setDemoCheckoutSuccess(true)}
+              leftSection={<IconCheck size={16} />}
+            >
+              Simulate Complete Sale
             </Button>
           </Group>
         </Stack>
