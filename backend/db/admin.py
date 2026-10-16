@@ -241,14 +241,31 @@ class StoreStaffAdmin(BaseModelAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(BaseModelAdmin):
-    list_display = ('mobile_number', 'name', 'email', 'user_id', 'created_at')
-    search_fields = ('mobile_number', 'name', 'email')
-    list_filter = ('is_deleted', 'created_at')
+    list_display = (
+        'mobile_number',
+        'name',
+        'customer_type',
+        'gstin',
+        'city',
+        'is_active',
+        'created_at',
+    )
+    search_fields = ('mobile_number', 'name', 'email', 'gstin', 'city')
+    list_filter = ('customer_type', 'is_active', 'is_deleted', 'created_at')
 
 
 @admin.register(StoreCustomer)
 class StoreCustomerAdmin(BaseModelAdmin):
-    list_display = ('customer_id', 'store_id', 'loyalty_points', 'first_visit')
+    list_display = (
+        'customer_id',
+        'store_id',
+        'loyalty_points',
+        'credit_limit',
+        'outstanding_balance',
+        'total_visits',
+        'last_visit',
+        'first_visit',
+    )
     search_fields = ('customer_id__mobile_number', 'customer_id__name', 'store_id__name')
     list_filter = ('store_id', 'is_deleted')
 
