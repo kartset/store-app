@@ -10,6 +10,7 @@ from utils.serializers import BaseModelSerializer
 class StockMovementSerializer(BaseModelSerializer):
     store = StoreSerializer(source='store_id', read_only=True)
     product = ProductSerializer(source='product_id', read_only=True)
+    vendor = VendorSerializer(source='vendor_id', read_only=True)
 
     class Meta:
         model = StockMovement
@@ -25,6 +26,7 @@ class StockMovementSerializer(BaseModelSerializer):
             'inventory_id',
             'store_id',
             'product_id',
+            'vendor_id',
             'movement_type',
             'quantity_delta',
             'quantity_before',
@@ -34,6 +36,7 @@ class StockMovementSerializer(BaseModelSerializer):
             'notes',
             'store',
             'product',
+            'vendor',
         )
         read_only_fields = (
             'id',

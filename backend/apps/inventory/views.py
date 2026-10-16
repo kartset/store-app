@@ -15,6 +15,8 @@ from db.models import (
     StockMovement,
     StockMovementType,
     Store,
+    Vendor,
+    VendorProduct,
 )
 
 from .serializers import (
@@ -126,6 +128,8 @@ class InventoryViewSet(viewsets.ModelViewSet):
         """
         Inward a bulk Goods Receipt Note (GRN) from a vendor into store inventory.
         Automatically provisions inventory records if not already created.
+        Associates vendor records, verifies tenant isolation, and automatically
+        resolves negotiated supplier cost pricing from VendorProduct catalog.
         """
         serializer = ReceiveGoodsRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -142,6 +146,19 @@ class InventoryViewSet(viewsets.ModelViewSet):
         except Store.DoesNotExist:
             return Response({'error': 'Store not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        vendor = None
+        if vendor_id:
+            try:
+                vendor = Vendor.objects.get(id=vendor_id, is_deleted=False)
+            except Vendor.DoesNotExist:
+                return Response({'error': f"Vendor '{vendor_id}' not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if vendor.organization_id_id != store.organization_id_id:
+                return Response(
+                    {'error': 'Vendor does not belong to the same organization as the store.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         processed_movements = []
         with transaction.atomic():
             for item in items:
@@ -153,7 +170,28 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 try:
                     product = Product.objects.get(id=product_id, is_deleted=False)
                 except Product.DoesNotExist:
-                    raise DjangoValidationError(f"Product '{product_id}' not found.")
+                    return Response({'error': f"Product '{product_id}' not found."}, status=status.HTTP_404_NOT_FOUND)
+
+                if product.organization_id_id != store.organization_id_id:
+                    return Response(
+                        {'error': f"Product '{product.name}' does not belong to the same organization as the store."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Auto-resolve store price from negotiated VendorProduct pricing or base cost price
+                if store_price is None and vendor:
+                    vp = VendorProduct.objects.filter(
+                        vendor_id=vendor,
+                        product_id=product,
+                        is_active=True,
+                        is_deleted=False,
+                    ).first()
+                    if vp and vp.negotiated_cost_price is not None:
+                        store_price = vp.negotiated_cost_price
+                    elif product.cost_price is not None:
+                        store_price = product.cost_price
+                elif store_price is None and product.cost_price is not None:
+                    store_price = product.cost_price
 
                 inv, _ = Inventory.objects.get_or_create(
                     store_id=store,
@@ -168,17 +206,22 @@ class InventoryViewSet(viewsets.ModelViewSet):
                     inv.store_price = store_price
                 if batch_number:
                     inv.batch_number = batch_number
-                if vendor_id:
-                    inv.vendor_id_id = vendor_id
+                if vendor:
+                    inv.vendor_id = vendor
                 inv.save()
+
+                reason = f"GRN Received from {vendor.name}" if vendor else 'GRN Purchase Receipt'
+                if reference_id:
+                    reason += f": {reference_id}"
 
                 movement = inv.adjust_stock(
                     quantity_delta=quantity,
                     movement_type=StockMovementType.PURCHASE_RECEIPT,
-                    reason=f"GRN Received: {reference_id}" if reference_id else 'GRN Purchase Receipt',
+                    reason=reason,
                     user=request.user,
                     reference_id=reference_id,
                     notes=notes,
+                    vendor=vendor,
                 )
                 processed_movements.append(movement)
 
@@ -187,6 +230,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 'message': f'Successfully inwarded {len(processed_movements)} items into {store.name}',
                 'items_count': len(processed_movements),
                 'reference_id': reference_id,
+                'vendor_id': vendor.id if vendor else None,
                 'movements': StockMovementSerializer(processed_movements, many=True).data,
             },
             status=status.HTTP_201_CREATED,
@@ -231,11 +275,11 @@ class InventoryViewSet(viewsets.ModelViewSet):
 class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Read-only audit log for tracking all inventory goods movements and adjustments.
-    Supports filtering by store, product, movement type, reference ID, and search.
+    Supports filtering by store, product, vendor, movement type, reference ID, and search.
     """
     queryset = (
         StockMovement.objects.filter(is_deleted=False)
-        .select_related('inventory_id', 'store_id', 'product_id', 'created_by')
+        .select_related('inventory_id', 'store_id', 'product_id', 'vendor_id', 'created_by')
         .order_by('-created_at')
     )
     serializer_class = StockMovementSerializer
@@ -245,6 +289,7 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
         qs = super().get_queryset()
         store_id = self.request.query_params.get('store_id')
         product_id = self.request.query_params.get('product_id')
+        vendor_id = self.request.query_params.get('vendor_id')
         movement_type = self.request.query_params.get('movement_type')
         reference_id = self.request.query_params.get('reference_id')
         start_date = self.request.query_params.get('start_date')
@@ -255,6 +300,8 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(store_id_id=store_id)
         if product_id:
             qs = qs.filter(product_id_id=product_id)
+        if vendor_id:
+            qs = qs.filter(vendor_id_id=vendor_id)
         if movement_type:
             qs = qs.filter(movement_type=movement_type)
         if reference_id:
@@ -271,6 +318,8 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
                 | Q(notes__icontains=search)
                 | Q(product_id__name__icontains=search)
                 | Q(product_id__sku__icontains=search)
+                | Q(vendor_id__name__icontains=search)
+                | Q(vendor_id__vendor_code__icontains=search)
             )
 
         return qs

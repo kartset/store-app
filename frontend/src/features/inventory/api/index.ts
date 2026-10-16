@@ -53,6 +53,7 @@ export function useInventorySummary(storeId?: string) {
 export interface StockMovementFilterParams {
   store_id?: string;
   product_id?: string;
+  vendor_id?: string;
   movement_type?: string;
   reference_id?: string;
   start_date?: string;
@@ -67,6 +68,7 @@ export function useStockMovements(params?: StockMovementFilterParams) {
       const queryParams: Record<string, string> = {};
       if (params?.store_id) queryParams.store_id = params.store_id;
       if (params?.product_id) queryParams.product_id = params.product_id;
+      if (params?.vendor_id) queryParams.vendor_id = params.vendor_id;
       if (params?.movement_type) queryParams.movement_type = params.movement_type;
       if (params?.reference_id) queryParams.reference_id = params.reference_id;
       if (params?.start_date) queryParams.start_date = params.start_date;
