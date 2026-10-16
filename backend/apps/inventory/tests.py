@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.inventory.serializers import InventorySerializer, StockMovementSerializer
 from db.models import (
@@ -354,3 +356,198 @@ class InventorySerializerTests(TestCase):
         self.assertEqual(data['movement_type'], StockMovementType.PURCHASE_RECEIPT)
         self.assertEqual(data['reference_id'], 'GRN-1234')
         self.assertEqual(data['product']['name'], 'Orange Juice 1L')
+
+
+class InventoryAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.org = Organization.objects.create(name='MegaStore Org', subdomain='megastore')
+        self.store_a = Store.objects.create(
+            organization_id=self.org,
+            name='Store Alpha',
+            is_active=True
+        )
+        self.store_b = Store.objects.create(
+            organization_id=self.org,
+            name='Store Beta',
+            is_active=True
+        )
+        self.product_1 = Product.objects.create(
+            organization_id=self.org,
+            name='Basmati Rice 5kg',
+            sku='RICE-BASMATI-5K',
+            barcode='8901111222333',
+            base_mrp=Decimal('450.00'),
+            cost_price=Decimal('350.00'),
+            uom=UnitOfMeasure.KG
+        )
+        self.product_2 = Product.objects.create(
+            organization_id=self.org,
+            name='Sunflower Oil 1L',
+            sku='OIL-SUNFLOWER-1L',
+            barcode='8904444555666',
+            base_mrp=Decimal('180.00'),
+            cost_price=Decimal('140.00'),
+            uom=UnitOfMeasure.LITRE
+        )
+        self.inv_a1 = Inventory.objects.create(
+            store_id=self.store_a,
+            product_id=self.product_1,
+            stock_quantity=20,
+            low_stock_threshold=10,
+            store_price=Decimal('440.00')
+        )
+        self.inv_a2 = Inventory.objects.create(
+            store_id=self.store_a,
+            product_id=self.product_2,
+            stock_quantity=5,  # Low stock
+            low_stock_threshold=15
+        )
+        self.inv_b1 = Inventory.objects.create(
+            store_id=self.store_b,
+            product_id=self.product_1,
+            stock_quantity=50
+        )
+        self.user = User.objects.create_user(
+            email='staff@megastore.com',
+            password='Password123!',
+            first_name='Alex',
+            last_name='Staff'
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_inventory_list_unauthenticated(self):
+        """Test unauthenticated requests are rejected with 401."""
+        self.client.force_authenticate(user=None)
+        response = self.client.get('/api/inventory/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_inventory_list_store_filter(self):
+        """Test listing inventory scoped to a specific store."""
+        response = self.client.get(f'/api/inventory/?store_id={self.store_a.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Results should only have items belonging to store_a
+        items = response.data['results'] if isinstance(response.data, dict) else response.data
+        self.assertEqual(len(items), 2)
+        store_ids = {str(item['store_id']) for item in items}
+        self.assertEqual(store_ids, {str(self.store_a.id)})
+
+    def test_inventory_list_search_by_sku_and_name(self):
+        """Test searching inventory by product SKU or name."""
+        response = self.client.get(f'/api/inventory/?store_id={self.store_a.id}&search=RICE')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data['results'] if isinstance(response.data, dict) else response.data
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['product']['sku'], 'RICE-BASMATI-5K')
+
+    def test_inventory_list_low_stock_filter(self):
+        """Test filtering inventory for low-stock alert items."""
+        response = self.client.get(f'/api/inventory/?store_id={self.store_a.id}&is_low_stock=true')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data['results'] if isinstance(response.data, dict) else response.data
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['product']['sku'], 'OIL-SUNFLOWER-1L')
+        self.assertTrue(items[0]['is_low_stock'])
+
+    def test_adjust_stock_action_positive_addition(self):
+        """Test POST /api/inventory/{id}/adjust_stock/ successfully adds stock."""
+        payload = {
+            'quantity_delta': 15,
+            'movement_type': StockMovementType.AUDIT_ADJUSTMENT,
+            'reason': 'Found unopened pack behind rack',
+            'reference_id': 'AUDIT-001'
+        }
+        response = self.client.post(f'/api/inventory/{self.inv_a1.id}/adjust_stock/', payload)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['inventory']['stock_quantity'], 35)
+        self.assertEqual(response.data['movement']['quantity_delta'], 15)
+        self.assertEqual(response.data['movement']['quantity_before'], 20)
+        self.assertEqual(response.data['movement']['quantity_after'], 35)
+
+    def test_adjust_stock_action_insufficient_stock(self):
+        """Test POST /api/inventory/{id}/adjust_stock/ fails when stock becomes negative."""
+        payload = {
+            'quantity_delta': -25,  # Current is 20
+            'movement_type': StockMovementType.POS_SALE,
+            'reason': 'Customer purchase'
+        }
+        response = self.client.post(f'/api/inventory/{self.inv_a1.id}/adjust_stock/', payload)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Insufficient stock', response.data.get('error', ''))
+
+    def test_adjust_stock_action_zero_delta_rejected(self):
+        """Test POST /api/inventory/{id}/adjust_stock/ rejects zero delta."""
+        payload = {
+            'quantity_delta': 0,
+            'movement_type': StockMovementType.AUDIT_ADJUSTMENT
+        }
+        response = self.client.post(f'/api/inventory/{self.inv_a1.id}/adjust_stock/', payload)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_receive_goods_grn_action(self):
+        """Test POST /api/inventory/receive_goods/ in bulk inwarding."""
+        product_new = Product.objects.create(
+            organization_id=self.org,
+            name='Green Tea 250g',
+            sku='TEA-GREEN-250',
+            base_mrp=Decimal('90.00')
+        )
+        payload = {
+            'store_id': str(self.store_a.id),
+            'reference_id': 'PO-88219-GRN',
+            'notes': 'Delivered via express logistics',
+            'items': [
+                {
+                    'product_id': str(self.product_1.id),
+                    'quantity': 30,
+                    'batch_number': 'LOT-RICE-2026'
+                },
+                {
+                    'product_id': str(product_new.id),
+                    'quantity': 45,
+                    'store_price': '85.00',
+                    'batch_number': 'LOT-TEA-001'
+                }
+            ]
+        }
+        response = self.client.post('/api/inventory/receive_goods/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['items_count'], 2)
+
+        # Verify database state
+        self.inv_a1.refresh_from_db()
+        self.assertEqual(self.inv_a1.stock_quantity, 50)  # 20 + 30
+        self.assertEqual(self.inv_a1.batch_number, 'LOT-RICE-2026')
+
+        new_inv = Inventory.objects.get(store_id=self.store_a, product_id=product_new)
+        self.assertEqual(new_inv.stock_quantity, 45)
+        self.assertEqual(new_inv.store_price, Decimal('85.00'))
+
+    def test_inventory_summary_action(self):
+        """Test GET /api/inventory/summary/ returns store-level statistics."""
+        response = self.client.get(f'/api/inventory/summary/?store_id={self.store_a.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertEqual(data['total_products'], 2)
+        self.assertEqual(data['total_units_in_stock'], 25)  # 20 + 5
+        self.assertEqual(data['low_stock_count'], 1)  # inv_a2 has 5 <= 15
+        self.assertEqual(data['out_of_stock_count'], 0)
+        self.assertGreater(Decimal(str(data['total_inventory_value'])), Decimal('0.00'))
+
+    def test_stock_movements_query_and_filters(self):
+        """Test GET /api/inventory/movements/ listing and filtering."""
+        # Perform adjustment to generate movement
+        self.inv_a1.adjust_stock(
+            quantity_delta=10,
+            movement_type=StockMovementType.PURCHASE_RECEIPT,
+            reference_id='GRN-AUDIT-QUERY',
+            user=self.user
+        )
+        response = self.client.get(
+            f'/api/inventory/movements/?store_id={self.store_a.id}&movement_type=PURCHASE_RECEIPT'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data['results'] if isinstance(response.data, dict) else response.data
+        self.assertGreaterEqual(len(items), 1)
+        self.assertEqual(items[0]['reference_id'], 'GRN-AUDIT-QUERY')
+
