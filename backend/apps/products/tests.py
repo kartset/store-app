@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from db.models import (
     Brand,
+    CatalogueItem,
     Category,
     Organization,
     OrganizationCategory,
@@ -770,5 +771,33 @@ class MasterCatalogAPITests(TestCase):
         foreign_res = self.client.post('/api/products/', foreign_org_payload, format='json')
         self.assertEqual(foreign_res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('subcategory_id', foreign_res.data)
+
+    def test_product_auto_links_global_catalogue_by_barcode(self):
+        """When a product is created with a manufacturer barcode matching a global catalogue item, it auto-links."""
+        cat_item = CatalogueItem.objects.create(
+            name='Global Master Soap 100g',
+            sku='GLOBAL-SOAP-100G',
+            barcode='8901234999888',
+            brand_name='Pears',
+            category_name='Soaps',
+            tax_slab=Decimal('18.00'),
+            uom=UnitOfMeasure.PCS,
+            suggested_mrp=Decimal('65.00'),
+        )
+
+        prod_payload = {
+            'organization_id': str(self.org_1.id),
+            'name': 'Custom Named Soap 100g',
+            'sku': 'SKU-LOCAL-SOAP',
+            'barcode': '8901234999888',
+            'base_mrp': '60.00',
+        }
+        res = self.client.post('/api/products/', prod_payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['catalogue_item_id'], cat_item.id)
+
+        # Check DB
+        product = Product.objects.get(id=res.data['id'])
+        self.assertEqual(product.catalogue_item_id, cat_item)
 
 
