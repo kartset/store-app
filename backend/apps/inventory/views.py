@@ -1,3 +1,1 @@
-from django.shortcuts import render
-
-# Create your views here.
+# Inventory views will be implemented in STOREAPP-36 (REST APIs)

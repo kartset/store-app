@@ -16,6 +16,7 @@ from .models import (
     OrganizationStaff,
     Payment,
     Product,
+    StockMovement,
     Store,
     StoreCategory,
     StoreCustomer,
@@ -130,9 +131,47 @@ class ProductAdmin(BaseModelAdmin):
 
 @admin.register(Inventory)
 class InventoryAdmin(BaseModelAdmin):
-    list_display = ('product_id', 'store_id', 'stock_quantity', 'store_price', 'vendor_id')
-    search_fields = ('product_id__name', 'product_id__sku', 'store_id__name')
+    list_display = (
+        'product_id',
+        'store_id',
+        'stock_quantity',
+        'low_stock_threshold',
+        'reorder_quantity',
+        'store_price',
+        'batch_number',
+        'last_restocked_at',
+    )
+    search_fields = ('product_id__name', 'product_id__sku', 'store_id__name', 'batch_number')
     list_filter = ('store_id', 'vendor_id', 'is_deleted')
+
+
+@admin.register(StockMovement)
+class StockMovementAdmin(BaseModelAdmin):
+    list_display = (
+        'product_id',
+        'store_id',
+        'movement_type',
+        'quantity_delta',
+        'quantity_before',
+        'quantity_after',
+        'reference_id',
+        'created_at',
+    )
+    search_fields = ('product_id__name', 'store_id__name', 'reference_id', 'reason')
+    list_filter = ('movement_type', 'store_id', 'created_at')
+    readonly_fields = (
+        'id',
+        'inventory_id',
+        'store_id',
+        'product_id',
+        'movement_type',
+        'quantity_delta',
+        'quantity_before',
+        'quantity_after',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    )
 
 
 class InvoiceItemInline(admin.TabularInline):
