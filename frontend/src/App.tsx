@@ -5,6 +5,7 @@ import { OrganizationList } from './features/organizations/components/Organizati
 import { StoreList } from './features/stores/components/StoreList';
 import { ProductList } from './features/products/components/ProductList';
 import { SubcategoryList } from './features/products/components/SubcategoryList';
+import { InventoryList } from './features/inventory/components/InventoryList';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="stores" element={<StoreList />} />
         <Route path="products" element={<ProductList />} />
         <Route path="subcategories" element={<SubcategoryList />} />
+        <Route path="inventory" element={<InventoryList />} />
       </Route>
       
       <Route path="*" element={<Navigate to="/" replace />} />
