@@ -103,9 +103,21 @@ class BrandAdmin(BaseModelAdmin):
 
 @admin.register(CatalogueItem)
 class CatalogueItemAdmin(BaseModelAdmin):
-    list_display = ('name', 'sku', 'hsn_code', 'created_at')
-    search_fields = ('name', 'sku', 'hsn_code')
-    list_filter = ('is_deleted',)
+    list_display = (
+        'name',
+        'sku',
+        'barcode',
+        'brand_name',
+        'category_name',
+        'tax_slab',
+        'uom',
+        'suggested_mrp',
+        'is_active',
+        'created_at',
+    )
+    search_fields = ('name', 'sku', 'barcode', 'brand_name', 'category_name', 'hsn_code')
+    list_filter = ('tax_slab', 'uom', 'is_active', 'is_deleted')
+
 
 
 @admin.register(Product)

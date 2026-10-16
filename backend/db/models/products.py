@@ -3,15 +3,7 @@ from django.db import models
 from utils.models import BaseModel
 
 
-class UnitOfMeasure(models.TextChoices):
-    PCS = 'PCS', 'Pieces'
-    KG = 'KG', 'Kilograms'
-    G = 'G', 'Grams'
-    LITRE = 'LITRE', 'Litres'
-    ML = 'ML', 'Millilitres'
-    BOX = 'BOX', 'Box'
-    PACKET = 'PACKET', 'Packet'
-    METER = 'METER', 'Meters'
+from .catalogue import UnitOfMeasure
 
 
 class Product(BaseModel):
