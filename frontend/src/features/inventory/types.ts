@@ -42,6 +42,7 @@ export interface StockMovement {
   inventory_id: string;
   store_id: string;
   product_id: string;
+  vendor_id?: string | null;
   movement_type: StockMovementType;
   quantity_delta: number;
   quantity_before: number;
@@ -65,6 +66,12 @@ export interface StockMovement {
     name: string;
     sku: string;
   };
+  vendor?: {
+    id: string;
+    name: string;
+    vendor_code?: string;
+    trade_name?: string;
+  } | null;
 }
 
 export interface InventorySummary {

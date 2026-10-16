@@ -101,7 +101,8 @@ class Inventory(BaseModel):
         user=None,
         reference_id: str | None = None,
         notes: str = '',
-        allow_negative: bool = False
+        allow_negative: bool = False,
+        vendor=None,
     ):
         """
         Atomically adjusts stock quantity and writes an immutable StockMovement audit record.
@@ -127,6 +128,9 @@ class Inventory(BaseModel):
         }:
             locked_inv.last_restocked_at = timezone.now()
 
+        if vendor:
+            locked_inv.vendor_id = vendor
+
         if user:
             locked_inv.updated_by = user
 
@@ -135,6 +139,7 @@ class Inventory(BaseModel):
         # Reflect updated fields on current instance
         self.stock_quantity = locked_inv.stock_quantity
         self.last_restocked_at = locked_inv.last_restocked_at
+        self.vendor_id = locked_inv.vendor_id
         self.updated_at = locked_inv.updated_at
 
         # Record immutable audit ledger entry
@@ -142,6 +147,7 @@ class Inventory(BaseModel):
             inventory_id=locked_inv,
             store_id=locked_inv.store_id,
             product_id=locked_inv.product_id,
+            vendor_id=vendor or (locked_inv.vendor_id if movement_type == StockMovementType.PURCHASE_RECEIPT else None),
             movement_type=movement_type,
             quantity_delta=quantity_delta,
             quantity_before=quantity_before,
@@ -173,6 +179,14 @@ class StockMovement(BaseModel):
         'db.Product',
         on_delete=models.CASCADE,
         related_name='stock_movements'
+    )
+    vendor_id = models.ForeignKey(
+        'db.Vendor',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stock_movements',
+        help_text="Supplier delivering consignment for purchase receipts or restocks."
     )
     movement_type = models.CharField(
         max_length=30,
@@ -212,6 +226,7 @@ class StockMovement(BaseModel):
             models.Index(fields=['inventory_id', 'created_at']),
             models.Index(fields=['store_id', 'created_at']),
             models.Index(fields=['product_id', 'created_at']),
+            models.Index(fields=['vendor_id', 'created_at']),
             models.Index(fields=['movement_type', 'created_at']),
         ]
 

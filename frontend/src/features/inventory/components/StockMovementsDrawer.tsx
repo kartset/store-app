@@ -18,9 +18,11 @@ import {
   IconArrowUpRight,
   IconArrowDownRight,
   IconArrowsExchange,
+  IconTruckDelivery,
 } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useStockMovements } from '../api';
+import { useVendors } from '../../vendors/api';
 import type { StockMovementType } from '../types';
 
 interface StockMovementsDrawerProps {
@@ -28,6 +30,7 @@ interface StockMovementsDrawerProps {
   onClose: () => void;
   storeId: string;
   storeName: string;
+  organizationId?: string;
   productId?: string;
   productName?: string;
 }
@@ -66,15 +69,33 @@ export function StockMovementsDrawer({
   onClose,
   storeId,
   storeName,
+  organizationId,
   productId,
   productName,
 }: StockMovementsDrawerProps) {
   const [selectedType, setSelectedType] = useState<string>('');
+  const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [search, setSearch] = useState<string>('');
+
+  const { data: vendors } = useVendors(
+    organizationId ? { organization_id: organizationId, is_active: true } : undefined
+  );
+
+  const vendorOptions = useMemo(() => {
+    if (!vendors) return [];
+    return [
+      { value: '', label: 'All Suppliers' },
+      ...vendors.map((v) => ({
+        value: v.id,
+        label: `${v.name} (${v.vendor_code || 'Vendor'})`,
+      })),
+    ];
+  }, [vendors]);
 
   const { data: movements, isLoading } = useStockMovements({
     store_id: storeId,
     product_id: productId,
+    vendor_id: selectedVendorId || undefined,
     movement_type: selectedType || undefined,
     search: search.trim() || undefined,
   });
@@ -118,6 +139,17 @@ export function StockMovementsDrawer({
             size="sm"
             clearable
           />
+          {vendorOptions.length > 1 && (
+            <Select
+              placeholder="Filter by supplier..."
+              leftSection={<IconTruckDelivery size={14} />}
+              data={vendorOptions}
+              value={selectedVendorId}
+              onChange={(val) => setSelectedVendorId(val || '')}
+              size="sm"
+              clearable
+            />
+          )}
         </Group>
 
         {/* Movements table */}
@@ -149,7 +181,7 @@ export function StockMovementsDrawer({
                   <Table.Th>Classification</Table.Th>
                   <Table.Th>Delta</Table.Th>
                   <Table.Th>Before → After</Table.Th>
-                  <Table.Th>Reason / Ref</Table.Th>
+                  <Table.Th>Supplier / Reason / Ref</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -206,11 +238,18 @@ export function StockMovementsDrawer({
                       </Table.Td>
 
                       <Table.Td>
-                        {m.reference_id && (
-                          <Badge size="xs" variant="outline" color="gray" mb={2}>
-                            {m.reference_id}
-                          </Badge>
-                        )}
+                        <Group gap={4} wrap="wrap" mb={2}>
+                          {m.vendor && (
+                            <Badge size="xs" variant="dot" color="indigo">
+                              {m.vendor.name}
+                            </Badge>
+                          )}
+                          {m.reference_id && (
+                            <Badge size="xs" variant="outline" color="gray">
+                              {m.reference_id}
+                            </Badge>
+                          )}
+                        </Group>
                         <Text size="xs" lineClamp={1}>
                           {m.reason || '—'}
                         </Text>

@@ -18,6 +18,7 @@ from db.models import (
     UnitOfMeasure,
     User,
     Vendor,
+    VendorProduct,
 )
 
 
@@ -550,4 +551,138 @@ class InventoryAPITests(TestCase):
         items = response.data['results'] if isinstance(response.data, dict) else response.data
         self.assertGreaterEqual(len(items), 1)
         self.assertEqual(items[0]['reference_id'], 'GRN-AUDIT-QUERY')
+
+    def test_receive_goods_with_vendor_and_auto_pricing(self):
+        """Test GRN inwarding with vendor selection auto-resolves negotiated cost price and records vendor on movement."""
+        vendor = Vendor.objects.create(
+            organization_id=self.org,
+            name='Agro Foods Wholesale',
+            gst_number='07AAAAA1111A1Z1',
+        )
+        product_mapped = Product.objects.create(
+            organization_id=self.org,
+            name='Wheat Flour 10kg',
+            sku='FLOUR-WHEAT-10K',
+            barcode='8909999888777',
+            base_mrp=Decimal('450.00'),
+            cost_price=Decimal('380.00'),
+            uom=UnitOfMeasure.KG,
+        )
+        VendorProduct.objects.create(
+            vendor_id=vendor,
+            product_id=product_mapped,
+            vendor_sku='AGRO-WF-10',
+            negotiated_cost_price=Decimal('360.00'),
+            minimum_order_quantity=20,
+            lead_time_days=2,
+            is_active=True,
+        )
+
+        payload = {
+            'store_id': str(self.store_a.id),
+            'vendor_id': str(vendor.id),
+            'reference_id': 'GRN-AGRO-2026-001',
+            'notes': 'Consignment verified by receiving dock',
+            'items': [
+                {
+                    'product_id': str(product_mapped.id),
+                    'quantity': 25,
+                    'batch_number': 'LOT-WF-2026A',
+                    # Notice: store_price is omitted, should auto-resolve to 360.00
+                }
+            ],
+        }
+
+        response = self.client.post('/api/inventory/receive_goods/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['items_count'], 1)
+        self.assertEqual(response.data['vendor_id'], vendor.id)
+
+        # Verify inventory store_price was auto-populated with negotiated cost price
+        inv = Inventory.objects.get(store_id=self.store_a, product_id=product_mapped)
+        self.assertEqual(inv.stock_quantity, 25)
+        self.assertEqual(inv.store_price, Decimal('360.00'))
+        self.assertEqual(inv.vendor_id, vendor)
+        self.assertEqual(inv.batch_number, 'LOT-WF-2026A')
+
+        # Verify stock movement audit ledger
+        movement = StockMovement.objects.get(inventory_id=inv, movement_type=StockMovementType.PURCHASE_RECEIPT)
+        self.assertEqual(movement.vendor_id, vendor)
+        self.assertIn('Agro Foods Wholesale', movement.reason)
+        self.assertEqual(movement.reference_id, 'GRN-AGRO-2026-001')
+
+    def test_receive_goods_cross_tenant_vendor_rejected(self):
+        """Test GRN inwarding rejects a vendor belonging to another organization."""
+        other_org = Organization.objects.create(name='Other Org Ltd', subdomain='otherorg')
+        rogue_vendor = Vendor.objects.create(
+            organization_id=other_org,
+            name='Rogue Cross-Tenant Vendor',
+            gst_number='07BBBBB2222B2Z2',
+        )
+
+        payload = {
+            'store_id': str(self.store_a.id),
+            'vendor_id': str(rogue_vendor.id),
+            'reference_id': 'PO-INVALID',
+            'items': [
+                {
+                    'product_id': str(self.product_1.id),
+                    'quantity': 10,
+                }
+            ],
+        }
+
+        response = self.client.post('/api/inventory/receive_goods/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('does not belong to the same organization', response.data['error'])
+
+    def test_receive_goods_cross_tenant_product_rejected(self):
+        """Test GRN inwarding rejects a product belonging to another organization."""
+        other_org = Organization.objects.create(name='Competitor Retail', subdomain='competitor')
+        alien_product = Product.objects.create(
+            organization_id=other_org,
+            name='Alien Widget',
+            sku='ALIEN-001',
+            barcode='8900000000000',
+            base_mrp=Decimal('100.00'),
+            uom=UnitOfMeasure.PCS,
+        )
+
+        payload = {
+            'store_id': str(self.store_a.id),
+            'reference_id': 'PO-ALIEN',
+            'items': [
+                {
+                    'product_id': str(alien_product.id),
+                    'quantity': 5,
+                }
+            ],
+        }
+
+        response = self.client.post('/api/inventory/receive_goods/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_stock_movements_filter_by_vendor(self):
+        """Test GET /api/inventory/movements/?vendor_id={id} filters audit trail by vendor."""
+        vendor_x = Vendor.objects.create(
+            organization_id=self.org,
+            name='Vendor X Logistics',
+            gst_number='07CCCCC3333C3Z3',
+        )
+        # Create GRN movement with vendor_x
+        self.inv_a1.adjust_stock(
+            quantity_delta=15,
+            movement_type=StockMovementType.PURCHASE_RECEIPT,
+            reference_id='GRN-VENDOR-X',
+            user=self.user,
+            vendor=vendor_x,
+        )
+
+        response = self.client.get(f'/api/inventory/movements/?vendor_id={vendor_x.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data['results'] if isinstance(response.data, dict) else response.data
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['reference_id'], 'GRN-VENDOR-X')
+        self.assertEqual(items[0]['vendor']['name'], 'Vendor X Logistics')
+
 

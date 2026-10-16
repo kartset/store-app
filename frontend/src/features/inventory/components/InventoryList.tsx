@@ -479,6 +479,7 @@ export function InventoryList() {
         onClose={() => setMovementsDrawerOpened(false)}
         storeId={activeStoreId}
         storeName={activeStore?.name || 'Active Store'}
+        organizationId={activeOrgId}
         productId={movementTargetProduct?.id}
         productName={movementTargetProduct?.name}
       />

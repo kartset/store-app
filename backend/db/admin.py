@@ -163,6 +163,7 @@ class StockMovementAdmin(BaseModelAdmin):
     list_display = (
         'product_id',
         'store_id',
+        'vendor_id',
         'movement_type',
         'quantity_delta',
         'quantity_before',
@@ -170,13 +171,14 @@ class StockMovementAdmin(BaseModelAdmin):
         'reference_id',
         'created_at',
     )
-    search_fields = ('product_id__name', 'store_id__name', 'reference_id', 'reason')
-    list_filter = ('movement_type', 'store_id', 'created_at')
+    search_fields = ('product_id__name', 'store_id__name', 'vendor_id__name', 'reference_id', 'reason')
+    list_filter = ('movement_type', 'store_id', 'vendor_id', 'created_at')
     readonly_fields = (
         'id',
         'inventory_id',
         'store_id',
         'product_id',
+        'vendor_id',
         'movement_type',
         'quantity_delta',
         'quantity_before',
