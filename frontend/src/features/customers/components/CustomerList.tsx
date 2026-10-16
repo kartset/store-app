@@ -44,6 +44,7 @@ import {
 import { useState, useMemo } from 'react';
 import { useCustomers, useDeleteCustomer } from '../api';
 import { CustomerDrawer } from './CustomerDrawer';
+import { Customer360Drawer } from './Customer360Drawer';
 import type { Customer, CustomerType } from '../types';
 
 export function CustomerList() {
@@ -56,6 +57,10 @@ export function CustomerList() {
   const [drawerOpened, setDrawerOpened] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isReadOnly, setIsReadOnly] = useState(false);
+
+  // Customer 360 Drawer State
+  const [drawer360Opened, setDrawer360Opened] = useState(false);
+  const [selectedCustomerFor360, setSelectedCustomerFor360] = useState<Customer | null>(null);
 
   // Delete Confirmation Modal State
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
@@ -107,11 +112,10 @@ export function CustomerList() {
     setDrawerOpened(true);
   };
 
-  // Open view profile drawer
-  const handleOpenView = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    setIsReadOnly(true);
-    setDrawerOpened(true);
+  // Open 360 profile & invoices drawer
+  const handleOpen360 = (customer: Customer) => {
+    setSelectedCustomerFor360(customer);
+    setDrawer360Opened(true);
   };
 
   // Trigger delete modal
@@ -414,7 +418,7 @@ export function CustomerList() {
                                 fw={600}
                                 truncate
                                 style={{ cursor: 'pointer' }}
-                                onClick={() => handleOpenView(customer)}
+                                onClick={() => handleOpen360(customer)}
                               >
                                 {customer.name || 'Unnamed Customer'}
                               </Text>
@@ -530,9 +534,9 @@ export function CustomerList() {
                             <Menu.Dropdown>
                               <Menu.Item
                                 leftSection={<IconEye size={14} />}
-                                onClick={() => handleOpenView(customer)}
+                                onClick={() => handleOpen360(customer)}
                               >
-                                View Details
+                                360 Profile & Invoices
                               </Menu.Item>
                               <Menu.Item
                                 leftSection={<IconEdit size={14} />}
@@ -585,6 +589,16 @@ export function CustomerList() {
         onClose={() => setDrawerOpened(false)}
         customer={selectedCustomer}
         isReadOnly={isReadOnly}
+      />
+
+      {/* Customer 360 Profile & Invoices Drawer */}
+      <Customer360Drawer
+        opened={drawer360Opened}
+        onClose={() => setDrawer360Opened(false)}
+        customer={selectedCustomerFor360}
+        onEdit={(cust) => {
+          handleOpenEdit(cust);
+        }}
       />
 
       {/* Delete Confirmation Modal */}

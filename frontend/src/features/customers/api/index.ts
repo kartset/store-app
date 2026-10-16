@@ -4,6 +4,7 @@ import type {
   CreateCustomerInput,
   Customer,
   CustomerFilterParams,
+  CustomerInvoice,
   CustomerLookupResponse,
   UpdateCustomerInput,
 } from '../types';
@@ -94,13 +95,15 @@ export function useCustomerLookup(mobile?: string, storeId?: string) {
   });
 }
 
-export function useCustomerInvoices(customerId?: string) {
+export function useCustomerInvoices(customerId?: string, storeId?: string) {
   return useQuery({
-    queryKey: ['customer-invoices', customerId],
+    queryKey: ['customer-invoices', customerId, storeId],
     queryFn: async () => {
       if (!customerId) return [];
-      const response = await api.get(`/api/customers/${customerId}/invoices/`);
-      return response.data;
+      const params: Record<string, string> = {};
+      if (storeId) params.store_id = storeId;
+      const response = await api.get<CustomerInvoice[]>(`/api/customers/${customerId}/invoices/`, { params });
+      return response.data || [];
     },
     enabled: Boolean(customerId),
   });
