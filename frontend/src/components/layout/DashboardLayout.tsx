@@ -21,6 +21,7 @@ import {
   IconLogout,
   IconSparkles,
   IconCategory,
+  IconBuildingWarehouse,
 } from '@tabler/icons-react';
 import { useMemo } from 'react';
 
@@ -266,6 +267,23 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/products')}
               active={location.pathname === '/products'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Inventory"
+              description="Store stock & inwarding"
+              leftSection={
+                <ThemeIcon size={28} radius="md" color={location.pathname === '/inventory' ? 'brand' : 'gray'} variant={location.pathname === '/inventory' ? 'filled' : 'light'}>
+                  <IconBuildingWarehouse size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/inventory')}
+              active={location.pathname === '/inventory'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
