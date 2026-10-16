@@ -82,3 +82,19 @@ This document outlines the core structural and architectural decisions made for 
 ## 11. Hierarchical Taxonomy & Tenant-Scoped Subcategories
 - **Decision:** Categories (`Category`) represent the global platform taxonomy (e.g. *Food & Beverages > Dairy > Milk*) and define default GST tax slabs and HSN codes. Subcategories (`Subcategory`) are scoped to `(organization_id, category_id)`.
 - **Reason:** Ensures national GST compliance and unified analytics at the platform category level, while granting retailers the freedom to create custom micro-classifications (e.g., "Artisanal Cheese", "Tetra Paks") without polluting other tenants' catalogs.
+
+---
+
+## 12. Vendor Master, Sourcing Matrix & Direct GRN Inwarding
+- **Decision:** Vendor management is tenant-scoped (`Vendor`), enforcing 15-character GSTIN validation with automated PAN extraction. Sourcing relations are maintained in `VendorProduct` (tracking vendor SKU, agreed unit purchase cost, MOQ, lead time, and primary vendor flag). When performing Goods Receipt Note (GRN) inwarding in store inventory, active vendors can be selected directly to auto-populate purchase cost and invoice references.
+- **Reason:** Retail organizations negotiate supply terms centrally, but receive stock at decentralized branch stores. Decoupling the organization vendor catalog from individual store inwarding allows multi-vendor price comparison while maintaining strict procurement audit trails.
+
+---
+
+## 13. 2-Tier Customer Architecture & Sub-Second POS Lookup Engine
+- **Decision:** Customer identities are split into a global tenant layer and a store-specific operational layer:
+  - **Global Customer Profile (`Customer`):** Unique anchor on 10-digit mobile number, full name, B2C Retail vs B2B Wholesale classification (`customer_type`), GSTIN, PAN, and relationship milestones (DOB, Anniversary).
+  - **Store Operational Mapping (`StoreCustomer`):** Store-specific visit counter, store loyalty points balance, store credit (khata) limit, and current outstanding balance.
+  - **POS Fast Lookup Endpoint (`GET /api/customers/lookup/?mobile=...`):** Strips punctuation, country codes (`+91`), and leading zeros, performing a pre-fetched single-query lookup returning customer intelligence and branch loyalty in < 50ms.
+- **Reason:** Shoppers frequently patronize multiple branches of the same retail chain. Centralizing the primary identity on the mobile number prevents duplicate customer records, while maintaining store-scoped loyalty balances and khata limits safeguards individual store cash drawers and franchise boundaries.
+

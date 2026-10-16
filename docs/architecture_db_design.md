@@ -213,20 +213,33 @@ erDiagram
     CUSTOMER {
         uuid id PK
         uuid user_id FK "Nullable web account"
-        string mobile_number UK "Primary phone identifier"
-        string name
-        string email
+        string mobile_number UK "Primary 10-digit phone identifier"
+        string name "Full legal or display name"
+        string email "Optional email"
+        string customer_type "RETAIL (B2C) or B2B (Wholesale)"
+        string gstin "15-digit GSTIN for B2B"
+        string pan_number "10-digit PAN"
+        string address_line1
+        string address_line2
+        string city
+        string state
+        string pincode
+        date date_of_birth
+        date anniversary_date
+        text notes
+        boolean is_active
     }
 
     STORE_CUSTOMER {
         uuid id PK
         uuid store_id FK
         uuid customer_id FK
-        int loyalty_points
-        decimal lifetime_spend
-        int visit_count
+        int loyalty_points "Store-specific points balance"
+        decimal credit_limit "Max khata credit limit"
+        decimal outstanding_balance "Unpaid credit balance"
         datetime first_visit
         datetime last_visit
+        int total_visits
     }
 
     VENDOR {
@@ -303,3 +316,9 @@ erDiagram
 4. **Double-Entry Stock Movement Ledger**:
    - The on-hand `Inventory.stock_quantity` is modified strictly through `adjust_stock()` which creates an atomic `StockMovement` audit row.
    - Stock changes are fully traceable to an actor, reason, movement type, and reference ID (Invoice, GRN, Transfer).
+
+5. **2-Tier Customer Identity & Multi-Branch Loyalty Engine**:
+   - `Customer` maintains global identity anchored on normalized 10-digit mobile number across the enterprise.
+   - `StoreCustomer` maintains branch-isolated relationships: accrued store loyalty points, visit counts, credit limit (khata), and outstanding debt.
+   - POS lookup endpoint (`GET /api/customers/lookup/?mobile=...`) aggregates customer intelligence and branch-specific balances in <50ms.
+
