@@ -23,6 +23,7 @@ import {
   IconCategory,
   IconBuildingWarehouse,
   IconTruckDelivery,
+  IconUsers,
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
@@ -308,6 +309,28 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/vendors')}
               active={location.pathname === '/vendors'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Customers"
+              description="Directory & loyalty profiles"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/customers' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/customers' ? 'filled' : 'light'}
+                >
+                  <IconUsers size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/customers')}
+              active={location.pathname === '/customers'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
