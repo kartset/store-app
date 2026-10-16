@@ -76,8 +76,14 @@ export interface CustomerFilterParams {
 }
 
 export interface CustomerLookupResponse {
-  customer: Customer;
-  store_relation: {
+  found: boolean;
+  mobile_number?: string;
+  customer: Customer | null;
+  store_loyalty_points: number;
+  store_credit_limit: string | number;
+  store_outstanding_balance: string | number;
+  store_visits: number;
+  store_relation?: {
     id: string;
     loyalty_points: number;
     credit_limit: string | number;
@@ -86,8 +92,8 @@ export interface CustomerLookupResponse {
     last_visit?: string | null;
     first_visit?: string | null;
   } | null;
-  loyalty_points: number;
-  available_credit: number;
+  loyalty_points?: number;
+  available_credit?: number;
 }
 
 export const INDIAN_STATES = [

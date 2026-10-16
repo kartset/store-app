@@ -237,6 +237,38 @@ class CustomerAPITests(TestCase):
         response = self.client.get('/api/customers/lookup/')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_customer_lookup_with_phone_formatting(self):
+        """Test lookup normalizes formatted Indian phone number prefixes."""
+        # Query with '+91 98765-43210'
+        response = self.client.get('/api/customers/lookup/?mobile=%2B91%2098765-43210')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['found'])
+        self.assertEqual(response.data['customer']['mobile_number'], '9876543210')
+
+        # Query with leading '0'
+        res_zero = self.client.get('/api/customers/lookup/?mobile=09876543210')
+        self.assertEqual(res_zero.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_zero.data['found'])
+
+    def test_customer_lookup_b2b_profile(self):
+        """Test lookup returns B2B customer with GSTIN and PAN details."""
+        response = self.client.get(f'/api/customers/lookup/?mobile=9123456789&store_id={self.store_1.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['found'])
+        self.assertEqual(response.data['customer']['customer_type'], CustomerType.B2B)
+        self.assertEqual(response.data['customer']['gstin'], '29ABCDE1234F1Z5')
+        self.assertEqual(response.data['customer']['pan_number'], 'ABCDE1234F')
+
+    def test_customer_lookup_unmapped_store_loyalty_defaults(self):
+        """Test lookup at a new store branch where customer hasn't shopped returns 0 points for that store."""
+        response = self.client.get(f'/api/customers/lookup/?mobile=9876543210&store_id={self.store_2.id}')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['found'])
+        self.assertEqual(response.data['store_loyalty_points'], 0)
+        self.assertEqual(response.data['store_visits'], 0)
+        # But aggregate loyalty across all stores remains accurate
+        self.assertEqual(response.data['customer']['total_loyalty_points'], 350)
+
     def test_customer_invoices_action(self):
         """Test GET /api/customers/{id}/invoices/ returns past billing history."""
         # Create invoices for customer
