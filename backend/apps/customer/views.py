@@ -155,7 +155,12 @@ class CustomerViewSet(viewsets.ModelViewSet):
         customer = self.get_object()
         store_id = request.query_params.get('store_id')
 
-        qs = Invoice.objects.filter(customer_id=customer, is_deleted=False).select_related('store_id').order_by('-created_at')
+        qs = (
+            Invoice.objects.filter(customer_id=customer, is_deleted=False)
+            .select_related('store_id')
+            .prefetch_related('items', 'items__product_id', 'payments')
+            .order_by('-created_at')
+        )
         if store_id:
             qs = qs.filter(store_id_id=store_id)
 

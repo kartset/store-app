@@ -128,3 +128,41 @@ export const INDIAN_STATES = [
   'Uttarakhand',
   'West Bengal',
 ];
+
+export interface InvoiceItem {
+  id: string;
+  product_id: string;
+  product_name?: string;
+  product_sku?: string;
+  quantity: number;
+  unit_price: string | number;
+  discount: string | number;
+  gst_amount: string | number;
+}
+
+export interface InvoicePayment {
+  id: string;
+  method: 'CASH' | 'CARD' | 'UPI' | 'RAZORPAY';
+  amount: string | number;
+  status: string;
+  external_transaction_id?: string | null;
+}
+
+export interface CustomerInvoice {
+  id: string;
+  created_at: string;
+  store_id: string;
+  customer_id: string;
+  type: 'POS' | 'ONLINE' | 'RETURN';
+  status: 'DRAFT' | 'PAID' | 'CANCELLED';
+  subtotal: string | number;
+  total_discount: string | number;
+  total_gst: string | number;
+  grand_total: string | number;
+  store?: {
+    id: string;
+    name: string;
+  } | null;
+  items?: InvoiceItem[];
+  payments?: InvoicePayment[];
+}
