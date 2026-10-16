@@ -36,7 +36,9 @@ import {
   IconBuildingSkyscraper,
   IconEye,
   IconCategory,
+  IconWorld,
 } from '@tabler/icons-react';
+
 import { useState, useMemo } from 'react';
 import {
   useProducts,
@@ -48,7 +50,9 @@ import {
 import { useOrganizations } from '../../organizations/api';
 import { ProductDrawer } from './ProductDrawer';
 import { BarcodeStickerModal } from './BarcodeStickerModal';
+import { AdoptCatalogueModal } from './AdoptCatalogueModal';
 import type { Product } from '../types';
+
 
 export function ProductList() {
   const { data: organizations } = useOrganizations();
@@ -109,8 +113,10 @@ export function ProductList() {
   // Modals state
   const [drawerOpened, setDrawerOpened] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [adoptModalOpened, setAdoptModalOpened] = useState(false);
 
   const [stickerModalOpened, setStickerModalOpened] = useState(false);
+
   const [stickerProduct, setStickerProduct] = useState<Product | null>(null);
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -222,20 +228,31 @@ export function ProductList() {
           )}
 
           {isOrgAdmin ? (
-            <Button
-              leftSection={<IconPlus size={16} />}
-              onClick={() => {
-                setEditingProduct(null);
-                setDrawerOpened(true);
-              }}
-              style={{
-                background: 'var(--brand-gradient)',
-                boxShadow: 'var(--shadow-sm)',
-              }}
-            >
-              Add Product
-            </Button>
+            <Group gap="xs">
+              <Button
+                variant="light"
+                color="indigo"
+                leftSection={<IconWorld size={16} />}
+                onClick={() => setAdoptModalOpened(true)}
+              >
+                Adopt from Catalogue
+              </Button>
+              <Button
+                leftSection={<IconPlus size={16} />}
+                onClick={() => {
+                  setEditingProduct(null);
+                  setDrawerOpened(true);
+                }}
+                style={{
+                  background: 'var(--brand-gradient)',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                Add Product
+              </Button>
+            </Group>
           ) : (
+
             <Tooltip label="Only Org Admins can add or delete master catalog products. Store personnel have inventory & barcode lookup rights.">
               <Badge
                 size="lg"
@@ -513,6 +530,17 @@ export function ProductList() {
                               {prod.name}
                             </Text>
                             <Group gap={6} mt={2}>
+                              {prod.catalogue_item_id && (
+                                <Badge
+                                  size="xs"
+                                  variant="gradient"
+                                  gradient={{ from: 'indigo', to: 'violet' }}
+                                  radius="sm"
+                                  leftSection={<IconWorld size={10} />}
+                                >
+                                  Global
+                                </Badge>
+                              )}
                               {prod.brand && (
                                 <Badge size="xs" variant="outline" color="gray" radius="sm">
                                   {prod.brand.name}
@@ -527,6 +555,7 @@ export function ProductList() {
                                 </Badge>
                               )}
                             </Group>
+
                           </div>
                         </Group>
                       </Table.Td>
@@ -749,6 +778,15 @@ export function ProductList() {
         defaultOrgId={activeOrgId}
         isReadOnly={!isOrgAdmin}
       />
+
+      {/* Adopt from Global Catalogue Modal */}
+      <AdoptCatalogueModal
+        opened={adoptModalOpened}
+        onClose={() => setAdoptModalOpened(false)}
+        organizationId={activeOrgId}
+        storeId={currentStore?.id}
+      />
+
 
       {/* Thermal Barcode Sticker Generator Modal */}
       {stickerProduct && (

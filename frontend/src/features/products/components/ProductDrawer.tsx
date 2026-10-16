@@ -27,6 +27,8 @@ import {
   IconCash,
   IconFolderPlus,
   IconEye,
+  IconWorld,
+  IconCheck,
 } from '@tabler/icons-react';
 import { useState, useMemo } from 'react';
 import {
@@ -37,9 +39,11 @@ import {
   useUpdateProduct,
   useSubcategories,
   useCreateSubcategory,
+  lookupGlobalCatalogue,
 } from '../api';
 import { useOrganizations } from '../../organizations/api';
-import type { CreateProductPayload, Product, UnitOfMeasure } from '../types';
+import type { CatalogueItem, CreateProductPayload, Product, UnitOfMeasure } from '../types';
+
 
 interface ProductDrawerProps {
   opened: boolean;
@@ -144,6 +148,30 @@ function ProductDrawerForm({
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Global Catalogue Match State
+  const [globalCatalogueMatch, setGlobalCatalogueMatch] = useState<CatalogueItem | null>(null);
+  const [catalogueLookupLoading, setCatalogueLookupLoading] = useState(false);
+  const [catalogueLookupMsg, setCatalogueLookupMsg] = useState<string | null>(null);
+
+  const handleLookupGlobalCatalogue = async () => {
+    if (!barcode.trim()) return;
+    setCatalogueLookupLoading(true);
+    setCatalogueLookupMsg(null);
+    try {
+      const match = await lookupGlobalCatalogue(barcode.trim());
+      if (match) {
+        setGlobalCatalogueMatch(match);
+      } else {
+        setCatalogueLookupMsg(`No match in Global Catalogue for "${barcode}".`);
+      }
+    } catch {
+      setCatalogueLookupMsg('Lookup failed.');
+    } finally {
+      setCatalogueLookupLoading(false);
+    }
+  };
+
+
   // Handle Category selection and auto-populate defaults
   const handleCategoryChange = (val: string | null) => {
     setCategoryId(val);
@@ -243,7 +271,9 @@ function ProductDrawerForm({
 
     const payload: CreateProductPayload = {
       organization_id: selectedOrgId,
+      catalogue_item_id: globalCatalogueMatch?.id || product?.catalogue_item_id || null,
       category_id: categoryId || null,
+
       subcategory_id: subcategoryId || null,
       brand_id: brandId || null,
       name: name.trim(),
@@ -417,9 +447,28 @@ function ProductDrawerForm({
             description="EAN-13, UPC from manufacturer packaging"
             placeholder="e.g. 8901262010099"
             value={barcode}
-            onChange={(e) => setBarcode(e.currentTarget.value)}
+            onChange={(e) => {
+              setBarcode(e.currentTarget.value);
+              setGlobalCatalogueMatch(null);
+              setCatalogueLookupMsg(null);
+            }}
             leftSection={<IconBarcode size={16} />}
             disabled={isReadOnly}
+            rightSection={
+              !isReadOnly && barcode.trim() ? (
+                <Tooltip label="Lookup in Global Catalogue">
+                  <ActionIcon
+                    variant="light"
+                    size="sm"
+                    color="indigo"
+                    loading={catalogueLookupLoading}
+                    onClick={handleLookupGlobalCatalogue}
+                  >
+                    <IconWorld size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              ) : null
+            }
           />
 
           <TextInput
@@ -429,6 +478,7 @@ function ProductDrawerForm({
             value={internalBarcode}
             onChange={(e) => setInternalBarcode(e.currentTarget.value)}
             disabled={isReadOnly}
+
             rightSection={
               !isReadOnly ? (
                 <Tooltip label="Generate random sticker barcode">
@@ -441,7 +491,45 @@ function ProductDrawerForm({
           />
         </SimpleGrid>
 
+
+        {globalCatalogueMatch && (
+          <Alert
+            icon={<IconSparkles size={16} />}
+            color="indigo"
+            radius="md"
+            title={`Global Product Matched: "${globalCatalogueMatch.name}"`}
+          >
+            <Group justify="space-between" align="center" wrap="wrap" gap="xs">
+              <Text size="xs">
+                HSN: {globalCatalogueMatch.hsn_code || 'N/A'} &bull; Tax: {globalCatalogueMatch.tax_slab}% &bull; Suggested MRP: ₹{globalCatalogueMatch.suggested_mrp || '0.00'} &bull; UOM: {globalCatalogueMatch.uom}
+              </Text>
+              <Button
+                size="xs"
+                variant="light"
+                color="indigo"
+                leftSection={<IconCheck size={14} />}
+                onClick={() => {
+                  setName(globalCatalogueMatch.name);
+                  if (globalCatalogueMatch.hsn_code) setHsnCode(globalCatalogueMatch.hsn_code);
+                  if (globalCatalogueMatch.tax_slab) setTaxSlab(Number(globalCatalogueMatch.tax_slab));
+                  if (globalCatalogueMatch.uom) setUom(globalCatalogueMatch.uom);
+                  if (globalCatalogueMatch.suggested_mrp) setBaseMrp(Number(globalCatalogueMatch.suggested_mrp));
+                }}
+              >
+                Auto-fill Form Details
+              </Button>
+            </Group>
+          </Alert>
+        )}
+
+        {catalogueLookupMsg && (
+          <Text size="xs" c="dimmed">
+            {catalogueLookupMsg}
+          </Text>
+        )}
+
         <Divider label="Tax & Commercial Pricing" labelPosition="left" />
+
 
         {/* Financials & GST Tax Slabs */}
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">

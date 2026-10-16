@@ -8,7 +8,11 @@ import type {
   CreateSubcategoryPayload,
   Product,
   Subcategory,
+  CatalogueItem,
+  AdoptCataloguePayload,
+  BulkAdoptCataloguePayload,
 } from '../types';
+
 
 export interface ProductFilterParams {
   organization_id?: string;
@@ -201,3 +205,92 @@ export async function lookupBarcode(code: string, organizationId?: string) {
   });
   return response.data;
 }
+
+export interface CatalogueFilterParams {
+  search?: string;
+  barcode?: string;
+  tax_slab?: string;
+  uom?: string;
+  is_active?: boolean;
+}
+
+export function useCatalogueItems(params?: CatalogueFilterParams) {
+  return useQuery({
+    queryKey: ['catalogue-items', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = {};
+      if (params?.search) queryParams.search = params.search;
+      if (params?.barcode) queryParams.barcode = params.barcode;
+      if (params?.tax_slab) queryParams.tax_slab = params.tax_slab;
+      if (params?.uom) queryParams.uom = params.uom;
+      if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
+
+      const response = await api.get<CatalogueItem[] | { results: CatalogueItem[] }>(
+        '/api/catalogue/items/',
+        { params: queryParams }
+      );
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return response.data.results || [];
+    },
+  });
+}
+
+export async function lookupGlobalCatalogue(code: string): Promise<CatalogueItem | null> {
+  try {
+    const response = await api.get<CatalogueItem>('/api/catalogue/items/lookup/', {
+      params: { barcode: code },
+    });
+    return response.data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+export function useAdoptCatalogueItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: AdoptCataloguePayload;
+    }) => {
+      const response = await api.post<{ message: string; product: Product }>(
+        `/api/catalogue/items/${id}/adopt/`,
+        data
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+  });
+}
+
+export function useBulkAdoptCatalogue() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: BulkAdoptCataloguePayload) => {
+      const response = await api.post<{
+        message: string;
+        adopted_count: number;
+        skipped_count: number;
+        skipped: string[];
+        products: Product[];
+      }>('/api/catalogue/items/bulk_adopt/', data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    },
+  });
+}
+

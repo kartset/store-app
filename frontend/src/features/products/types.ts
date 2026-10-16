@@ -98,7 +98,9 @@ export interface Product {
 
 export interface CreateProductPayload {
   organization_id: string;
+  catalogue_item_id?: string | null;
   category_id?: string | null;
+
   subcategory_id?: string | null;
   brand_id?: string | null;
   name: string;
@@ -117,3 +119,48 @@ export interface CreateProductPayload {
   is_active?: boolean;
   low_stock_threshold?: number;
 }
+
+export interface CatalogueItem {
+  id: string;
+  name: string;
+  sku: string;
+  barcode?: string | null;
+  brand_name?: string | null;
+  category_name?: string | null;
+  hsn_code?: string | null;
+  tax_slab: string | number;
+  uom: UnitOfMeasure;
+  suggested_mrp?: string | number | null;
+  description?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AdoptCataloguePayload {
+  organization_id: string;
+  cost_price?: number | string;
+  base_mrp?: number | string;
+  sku?: string;
+  internal_barcode?: string;
+  category_id?: string | null;
+  subcategory_id?: string | null;
+  brand_id?: string | null;
+  tax_slab?: number | string | null;
+  uom?: UnitOfMeasure | null;
+  low_stock_threshold?: number;
+  is_perishable?: boolean;
+  has_expiry?: boolean;
+  is_returnable?: boolean;
+  store_id?: string | null;
+  initial_stock?: number;
+  store_price?: number | string | null;
+}
+
+export interface BulkAdoptCataloguePayload {
+  organization_id: string;
+  catalogue_item_ids: string[];
+  category_id?: string | null;
+  store_id?: string | null;
+}
+
