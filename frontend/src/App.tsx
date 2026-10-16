@@ -6,6 +6,7 @@ import { StoreList } from './features/stores/components/StoreList';
 import { ProductList } from './features/products/components/ProductList';
 import { SubcategoryList } from './features/products/components/SubcategoryList';
 import { InventoryList } from './features/inventory/components/InventoryList';
+import { VendorList } from './features/vendors/components/VendorList';
 
 function App() {
   return (
@@ -20,7 +21,9 @@ function App() {
         <Route path="products" element={<ProductList />} />
         <Route path="subcategories" element={<SubcategoryList />} />
         <Route path="inventory" element={<InventoryList />} />
+        <Route path="vendors" element={<VendorList />} />
       </Route>
+
       
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
