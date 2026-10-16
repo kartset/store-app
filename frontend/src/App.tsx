@@ -7,6 +7,7 @@ import { ProductList } from './features/products/components/ProductList';
 import { SubcategoryList } from './features/products/components/SubcategoryList';
 import { InventoryList } from './features/inventory/components/InventoryList';
 import { VendorList } from './features/vendors/components/VendorList';
+import { CustomerList } from './features/customers/components/CustomerList';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route path="subcategories" element={<SubcategoryList />} />
         <Route path="inventory" element={<InventoryList />} />
         <Route path="vendors" element={<VendorList />} />
+        <Route path="customers" element={<CustomerList />} />
       </Route>
 
       
