@@ -274,9 +274,10 @@ class OrderItemAdmin(BaseModelAdmin):
 
 @admin.register(Vendor)
 class VendorAdmin(BaseModelAdmin):
-    list_display = ('name', 'organization_id', 'gst_number', 'created_at')
-    search_fields = ('name', 'gst_number', 'organization_id__name')
-    list_filter = ('organization_id', 'is_deleted')
+    list_display = ('name', 'trade_name', 'vendor_code', 'organization_id', 'gstin', 'phone', 'payment_terms', 'is_active')
+    search_fields = ('name', 'trade_name', 'vendor_code', 'gstin', 'pan_number', 'phone', 'email', 'organization_id__name')
+    list_filter = ('organization_id', 'payment_terms', 'is_active', 'is_deleted')
+
 
 
 @admin.register(Delivery)
