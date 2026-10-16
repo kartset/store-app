@@ -22,7 +22,9 @@ import {
   IconSparkles,
   IconCategory,
   IconBuildingWarehouse,
+  IconTruckDelivery,
 } from '@tabler/icons-react';
+
 import { useMemo } from 'react';
 
 export function DashboardLayout() {
@@ -290,6 +292,29 @@ export function DashboardLayout() {
                 fontSize: '14px',
               }}
             />
+
+            <NavLink
+              label="Vendors"
+              description="Suppliers & procurement"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/vendors' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/vendors' ? 'filled' : 'light'}
+                >
+                  <IconTruckDelivery size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/vendors')}
+              active={location.pathname === '/vendors'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
 
             {isOrgAdmin && (
               <NavLink
