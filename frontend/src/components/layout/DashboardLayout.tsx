@@ -25,6 +25,7 @@ import {
   IconTruckDelivery,
   IconUsers,
   IconReceipt,
+  IconCashRegister,
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
@@ -173,6 +174,17 @@ export function DashboardLayout() {
                 )}
               </Badge>
             )}
+
+            <Button
+              size="xs"
+              variant={location.pathname === '/pos' ? 'filled' : 'light'}
+              color="brand"
+              leftSection={<IconCashRegister size={15} />}
+              onClick={() => navigate('/pos')}
+              style={{ fontWeight: 700 }}
+            >
+              Counter POS
+            </Button>
 
             {/* User Profile Pill */}
             <Group gap="xs" style={{ paddingLeft: '8px', borderLeft: '1px solid var(--border-subtle)' }}>
@@ -332,6 +344,33 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/customers')}
               active={location.pathname === '/customers'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="POS Counter Terminal"
+              description="Fast billing & barcode checkout"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/pos' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/pos' ? 'filled' : 'light'}
+                >
+                  <IconCashRegister size={16} />
+                </ThemeIcon>
+              }
+              rightSection={
+                <Badge size="xs" color="brand" variant="filled">
+                  LIVE
+                </Badge>
+              }
+              onClick={() => navigate('/pos')}
+              active={location.pathname === '/pos'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,

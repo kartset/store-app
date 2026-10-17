@@ -9,6 +9,7 @@ import { InventoryList } from './features/inventory/components/InventoryList';
 import { VendorList } from './features/vendors/components/VendorList';
 import { CustomerList } from './features/customers/components/CustomerList';
 import { InvoiceList } from './features/invoice/components/InvoiceList';
+import { POSTerminal } from './features/pos/components/POSTerminal';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
         <Route path="vendors" element={<VendorList />} />
         <Route path="customers" element={<CustomerList />} />
         <Route path="invoices" element={<InvoiceList />} />
+        <Route path="pos" element={<POSTerminal />} />
       </Route>
 
       
