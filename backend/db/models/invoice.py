@@ -206,6 +206,9 @@ class Payment(BaseModel):
         default=PaymentMethod.CASH
     )
     external_transaction_id = models.CharField(max_length=255, null=True, blank=True)
+    gateway_order_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    gateway_signature = models.CharField(max_length=255, null=True, blank=True)
+    gateway_response = models.JSONField(null=True, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     amount_tendered = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     change_returned = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
