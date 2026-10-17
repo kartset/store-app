@@ -26,8 +26,10 @@ import {
   IconReceipt,
   IconRotate2,
   IconUser,
+  IconQrcode,
 } from '@tabler/icons-react';
 import { useCancelInvoice, useInvoice } from '../api';
+import { DynamicUPIQRModal, useCreatePaymentOrder, type CreateOrderResponse } from '../../payments';
 import { ThermalReceiptModal } from './ThermalReceiptModal';
 
 interface InvoiceDetailsDrawerProps {
@@ -39,9 +41,30 @@ interface InvoiceDetailsDrawerProps {
 export function InvoiceDetailsDrawer({ invoiceId, opened, onClose }: InvoiceDetailsDrawerProps) {
   const { data: invoice, isLoading, refetch } = useInvoice(invoiceId || undefined);
   const cancelMutation = useCancelInvoice();
+  const createOrderMutation = useCreatePaymentOrder();
 
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [dynamicOrderData, setDynamicOrderData] = useState<CreateOrderResponse | null>(null);
+  const [dynamicQRModalOpen, setDynamicQRModalOpen] = useState(false);
+  const [isCreatingQR, setIsCreatingQR] = useState(false);
+
+  const handleCollectUPI = async () => {
+    if (!invoice) return;
+    setIsCreatingQR(true);
+    try {
+      const order = await createOrderMutation.mutateAsync({
+        invoice_id: invoice.id,
+        method: 'UPI',
+      });
+      setDynamicOrderData(order);
+      setDynamicQRModalOpen(true);
+    } catch (err) {
+      console.error('Failed to create UPI order:', err);
+    } finally {
+      setIsCreatingQR(false);
+    }
+  };
 
   if (!opened) return null;
 
@@ -308,6 +331,20 @@ export function InvoiceDetailsDrawer({ invoiceId, opened, onClose }: InvoiceDeta
                       </Text>
                     )}
 
+                    {invoice.status !== 'PAID' && invoice.status !== 'CANCELLED' && (
+                      <Button
+                        size="xs"
+                        color="teal"
+                        variant="light"
+                        leftSection={<IconQrcode size={14} />}
+                        loading={isCreatingQR}
+                        onClick={handleCollectUPI}
+                        mt="xs"
+                      >
+                        Collect Balance via Dynamic UPI QR
+                      </Button>
+                    )}
+
                     {invoice.notes && (
                       <Box mt="xs">
                         <Text size="xs" fw={600} c="dimmed">Cashier Notes:</Text>
@@ -442,6 +479,17 @@ export function InvoiceDetailsDrawer({ invoiceId, opened, onClose }: InvoiceDeta
         opened={receiptOpen}
         onClose={() => setReceiptOpen(false)}
         invoice={invoice || null}
+      />
+
+      {/* Dynamic UPI QR Modal */}
+      <DynamicUPIQRModal
+        opened={dynamicQRModalOpen}
+        onClose={() => setDynamicQRModalOpen(false)}
+        orderData={dynamicOrderData}
+        onPaymentSuccess={() => {
+          setDynamicQRModalOpen(false);
+          refetch();
+        }}
       />
     </>
   );
