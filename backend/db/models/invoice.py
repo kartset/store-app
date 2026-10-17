@@ -88,6 +88,13 @@ class Invoice(BaseModel):
         blank=True,
         related_name='invoices'
     )
+    register_session_id = models.ForeignKey(
+        'db.CashRegisterSession',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invoices'
+    )
     invoice_number = models.CharField(
         max_length=100,
         unique=True,

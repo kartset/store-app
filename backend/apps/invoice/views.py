@@ -15,6 +15,9 @@ from apps.invoice.serializers import (
     InvoiceSerializer,
 )
 from db.models import (
+    CashRegisterSession,
+    CashTransaction,
+    CashTransactionType,
     Customer,
     Inventory,
     Invoice,
@@ -24,6 +27,7 @@ from db.models import (
     Payment,
     PaymentMethod,
     Product,
+    RegisterSessionStatus,
     StockMovementType,
     Store,
     StoreCustomer,
@@ -120,15 +124,18 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         # Customer snapshot data
         customer_phone = (
             data.get('customer_phone') or
-            (customer.mobile_number if customer else '')
+            (customer.mobile_number if customer else '') or
+            ''
         ).strip()
         customer_name = (
             data.get('customer_name') or
-            (customer.name if customer else '')
+            (customer.name if customer else '') or
+            ''
         ).strip()
         customer_gstin = (
             data.get('customer_gstin') or
-            (customer.gstin if customer else '')
+            (customer.gstin if customer else '') or
+            ''
         ).strip()
 
         is_tax_inclusive = data.get('is_tax_inclusive', True)
@@ -248,10 +255,18 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         # 5. Calculate Points Earned (1 point per ₹100 spent)
         loyalty_points_earned = int(rounded_grand_total // Decimal('100.00')) if store_customer else 0
 
+        # Check active register session for this store
+        active_session = CashRegisterSession.objects.filter(
+            store_id=store,
+            status=RegisterSessionStatus.OPEN,
+            is_deleted=False
+        ).first()
+
         # 6. Create Invoice
         invoice = Invoice.objects.create(
             store_id=store,
             customer_id=customer,
+            register_session_id=active_session,
             type=data.get('type', InvoiceType.POS),
             status=InvoiceStatus.DRAFT,
             subtotal=subtotal.quantize(Decimal('0.01')),
@@ -308,9 +323,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         # 8. Record Payments
         payments_payload = data.get('payments', [])
         total_paid = Decimal('0.00')
+        created_payments = []
         for pay in payments_payload:
             amount = Decimal(str(pay['amount']))
-            Payment.objects.create(
+            p_obj = Payment.objects.create(
                 invoice_id=invoice,
                 method=pay.get('method', PaymentMethod.CASH),
                 amount=amount,
@@ -319,12 +335,40 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 external_transaction_id=pay.get('external_transaction_id') or '',
                 status='SUCCESS',
             )
+            created_payments.append(p_obj)
             total_paid += amount
 
         # If fully paid, transition status to PAID
         if total_paid >= rounded_grand_total > Decimal('0.00') or rounded_grand_total == Decimal('0.00'):
             invoice.status = InvoiceStatus.PAID
         invoice.save()
+
+        # Update active register session shift totals and record cash transactions
+        if active_session:
+            active_session.invoices_count += 1
+            active_session.total_sales += rounded_grand_total
+
+            for pay_record in created_payments:
+                if pay_record.method == PaymentMethod.CASH:
+                    active_session.total_cash_sales += pay_record.amount
+                    active_session.expected_cash += pay_record.amount
+                    CashTransaction.objects.create(
+                        session_id=active_session,
+                        type=CashTransactionType.CASH_SALE,
+                        amount=pay_record.amount,
+                        invoice_id=invoice,
+                        payment_id=pay_record,
+                        reason=f"Cash Sale Invoice #{invoice.invoice_number}",
+                        created_by=request.user if request.user.is_authenticated else None,
+                    )
+                elif pay_record.method == PaymentMethod.UPI:
+                    active_session.total_upi_sales += pay_record.amount
+                elif pay_record.method == PaymentMethod.CARD:
+                    active_session.total_card_sales += pay_record.amount
+                elif pay_record.method == PaymentMethod.STORE_CREDIT:
+                    active_session.total_credit_sales += pay_record.amount
+
+            active_session.save()
 
         # 9. Update Store Customer Loyalty Ledger
         if store_customer:
