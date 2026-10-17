@@ -24,6 +24,7 @@ import {
   IconBuildingWarehouse,
   IconTruckDelivery,
   IconUsers,
+  IconReceipt,
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
@@ -331,6 +332,28 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/customers')}
               active={location.pathname === '/customers'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Invoices"
+              description="Receipts & tax bills"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/invoices' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/invoices' ? 'filled' : 'light'}
+                >
+                  <IconReceipt size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/invoices')}
+              active={location.pathname === '/invoices'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
