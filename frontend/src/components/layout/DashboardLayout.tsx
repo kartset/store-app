@@ -339,6 +339,28 @@ export function DashboardLayout() {
             />
 
             <NavLink
+              label="Deliveries & Dispatch"
+              description="Fleet, driver OTP & COD"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/deliveries' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/deliveries' ? 'filled' : 'light'}
+                >
+                  <IconTruckDelivery size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/deliveries')}
+              active={location.pathname === '/deliveries'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
               label="Inventory"
               description="Store stock & inwarding"
               leftSection={

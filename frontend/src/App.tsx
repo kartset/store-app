@@ -14,6 +14,7 @@ import { RegisterDashboard } from './features/register/components/RegisterDashbo
 import { OrderList } from './features/orders';
 import { AnalyticsDashboard } from './features/analytics';
 import { DataExchangeHub } from './features/data-exchange';
+import { DeliveryList } from './features/delivery';
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
         <Route path="pos" element={<POSTerminal />} />
         <Route path="register" element={<RegisterDashboard />} />
         <Route path="orders" element={<OrderList />} />
+        <Route path="deliveries" element={<DeliveryList />} />
         <Route path="analytics" element={<AnalyticsDashboard />} />
         <Route path="data-exchange" element={<DataExchangeHub />} />
       </Route>
