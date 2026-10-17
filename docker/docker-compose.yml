@@ -6,18 +6,27 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-store_user} -d $${POSTGRES_DB:-store_db}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
 
   backend:
     build:
       context: ..
       dockerfile: docker/backend.Dockerfile
+    entrypoint: ["/entrypoint.sh"]
+    command: ["uv", "run", "manage.py", "runserver", "0.0.0.0:8000"]
     env_file: ../.env
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
       - ../backend:/app
+      - ./entrypoint.sh:/entrypoint.sh
       - uv_cache:/root/.cache/uv
 
   frontend:
