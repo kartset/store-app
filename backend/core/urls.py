@@ -32,6 +32,7 @@ urlpatterns = [
     path("api/credit-notes/", include("apps.invoice.credit_note_urls")),
     path("api/registers/", include("apps.register.urls")),
     path("api/payments/", include("apps.payments.urls")),
+    path("api/orders/", include("apps.orders.urls")),
 ]
 
 
