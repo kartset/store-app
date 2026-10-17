@@ -17,6 +17,7 @@ import {
   Select,
   Divider,
   Alert,
+  ThemeIcon,
 } from '@mantine/core';
 import {
   IconBarcode,
@@ -33,12 +34,20 @@ import {
   IconClock,
   IconArrowsMaximize,
   IconArrowsMinimize,
+  IconVault,
+  IconLock,
 } from '@tabler/icons-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStores } from '../../stores/api';
 import { useInventory } from '../../inventory/api';
 import { POSCustomerLookup } from '../../customers/components/POSCustomerLookup';
 import { ThermalReceiptModal } from '../../invoice/components/ThermalReceiptModal';
+import { useCurrentRegisterSession } from '../../register/api';
+import { OpenRegisterModal } from '../../register/components/OpenRegisterModal';
+import { CashDropModal } from '../../register/components/CashDropModal';
+import { CloseRegisterModal } from '../../register/components/CloseRegisterModal';
+import { ZReportModal } from '../../register/components/ZReportModal';
 import { ParkedCartsModal } from './ParkedCartsModal';
 import { POSCheckoutModal } from './POSCheckoutModal';
 import { ProductSearchModal } from './ProductSearchModal';
@@ -48,8 +57,10 @@ import type { CartItem, ParkedCart } from '../types';
 import type { Customer } from '../../customers/types';
 import type { InventoryItem } from '../../inventory/types';
 import type { Invoice } from '../../invoice/types';
+import type { CashRegisterSession } from '../../register/types';
 
 export function POSTerminal() {
+  const navigate = useNavigate();
   // Store Selection
   const { data: stores = [] } = useStores();
   const [selectedStoreId, setSelectedStoreId] = useState<string>(() => {
@@ -92,6 +103,17 @@ export function POSTerminal() {
   const [completedInvoice, setCompletedInvoice] = useState<Invoice | null>(null);
   const [changeAlert, setChangeAlert] = useState<number | null>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
+
+  // Register Shift State & Query
+  const {
+    data: currentShift,
+    refetch: refetchShift,
+  } = useCurrentRegisterSession(selectedStoreId);
+  const [openRegisterOpened, setOpenRegisterOpened] = useState(false);
+  const [cashDropOpened, setCashDropOpened] = useState(false);
+  const [closeRegisterOpened, setCloseRegisterOpened] = useState(false);
+  const [zReportOpened, setZReportOpened] = useState(false);
+  const [zReportSession, setZReportSession] = useState<CashRegisterSession | null>(null);
 
   // Barcode / Fast Input Ref
   const scanInputRef = useRef<HTMLInputElement>(null);
@@ -319,6 +341,7 @@ export function POSTerminal() {
     setLoyaltyDiscount(0);
     setLoyaltyPointsRedeemed(0);
     setScanQuery('');
+    refetchShift();
     scanInputRef.current?.focus();
   };
 
@@ -412,6 +435,103 @@ export function POSTerminal() {
                 onClick={handleClearCart}
               >
                 Clear Cart
+              </Button>
+            </Group>
+          </Group>
+        </Paper>
+
+        {/* Register Shift Status Strip */}
+        <Paper
+          p="xs"
+          withBorder
+          radius="md"
+          style={{
+            backgroundColor: currentShift?.status === 'OPEN' ? 'rgba(5, 150, 105, 0.04)' : 'rgba(245, 158, 11, 0.05)',
+            borderColor: currentShift?.status === 'OPEN' ? 'rgba(5, 150, 105, 0.25)' : 'rgba(245, 158, 11, 0.25)',
+          }}
+        >
+          <Group justify="space-between" align="center" wrap="wrap">
+            <Group gap="sm">
+              <ThemeIcon
+                size={26}
+                radius="md"
+                color={currentShift?.status === 'OPEN' ? 'teal' : 'orange'}
+                variant="light"
+              >
+                <IconCashRegister size={15} />
+              </ThemeIcon>
+
+              {currentShift?.status === 'OPEN' ? (
+                <>
+                  <Badge color="teal" variant="filled" size="xs">
+                    SHIFT ACTIVE
+                  </Badge>
+                  <Text size="xs" fw={700} style={{ fontFamily: 'monospace' }}>
+                    {currentShift.session_number}
+                  </Text>
+                  <Divider orientation="vertical" h={14} />
+                  <Text size="xs" c="dimmed">
+                    Drawer Cash:
+                  </Text>
+                  <Text size="xs" fw={800} c="teal">
+                    ₹{parseFloat(currentShift.expected_cash || '0').toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </Text>
+                  <Divider orientation="vertical" h={14} />
+                  <Text size="xs" c="dimmed">
+                    Cashier: <b>{currentShift.cashier ? `${currentShift.cashier.first_name} ${currentShift.cashier.last_name || ''}`.trim() : 'Active Staff'}</b>
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Badge color="orange" variant="filled" size="xs">
+                    NO SHIFT OPEN
+                  </Badge>
+                  <Text size="xs" c="dimmed">
+                    Register drawer is not open for this counter. Start a shift to track drawer cash float.
+                  </Text>
+                </>
+              )}
+            </Group>
+
+            <Group gap="xs">
+              {currentShift?.status === 'OPEN' ? (
+                <>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="orange"
+                    leftSection={<IconVault size={13} />}
+                    onClick={() => setCashDropOpened(true)}
+                  >
+                    Safe Drop
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="red"
+                    leftSection={<IconLock size={13} />}
+                    onClick={() => setCloseRegisterOpened(true)}
+                  >
+                    Close Shift
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="xs"
+                  color="brand"
+                  leftSection={<IconCashRegister size={13} />}
+                  onClick={() => setOpenRegisterOpened(true)}
+                >
+                  Open Shift
+                </Button>
+              )}
+              <Button
+                size="xs"
+                variant="subtle"
+                color="gray"
+                onClick={() => navigate('/register')}
+              >
+                Register Dashboard →
               </Button>
             </Group>
           </Group>
@@ -864,6 +984,46 @@ export function POSTerminal() {
         opened={receiptModalOpened}
         onClose={() => setReceiptModalOpened(false)}
         invoice={completedInvoice}
+      />
+
+      {/* Register Shift Modals */}
+      <OpenRegisterModal
+        opened={openRegisterOpened}
+        onClose={() => setOpenRegisterOpened(false)}
+        storeId={selectedStoreId}
+        storeName={activeStore?.name}
+        onSuccess={() => refetchShift()}
+      />
+
+      {currentShift?.status === 'OPEN' && (
+        <>
+          <CashDropModal
+            opened={cashDropOpened}
+            onClose={() => setCashDropOpened(false)}
+            session={currentShift}
+            onSuccess={() => refetchShift()}
+          />
+
+          <CloseRegisterModal
+            opened={closeRegisterOpened}
+            onClose={() => setCloseRegisterOpened(false)}
+            session={currentShift}
+            onClosedSuccessfully={(closed) => {
+              refetchShift();
+              setZReportSession(closed);
+              setZReportOpened(true);
+            }}
+          />
+        </>
+      )}
+
+      <ZReportModal
+        opened={zReportOpened}
+        onClose={() => {
+          setZReportOpened(false);
+          setZReportSession(null);
+        }}
+        session={zReportSession}
       />
     </Box>
   );
