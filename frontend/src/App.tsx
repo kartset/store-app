@@ -13,6 +13,7 @@ import { POSTerminal } from './features/pos/components/POSTerminal';
 import { RegisterDashboard } from './features/register/components/RegisterDashboard';
 import { OrderList } from './features/orders';
 import { AnalyticsDashboard } from './features/analytics';
+import { DataExchangeHub } from './features/data-exchange';
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
         <Route path="register" element={<RegisterDashboard />} />
         <Route path="orders" element={<OrderList />} />
         <Route path="analytics" element={<AnalyticsDashboard />} />
+        <Route path="data-exchange" element={<DataExchangeHub />} />
       </Route>
 
       
