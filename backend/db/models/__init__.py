@@ -13,3 +13,4 @@ from .orders import *
 from .vendor import *
 from .delivery import *
 from .user import *
+from .register import *
