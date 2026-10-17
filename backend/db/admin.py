@@ -205,23 +205,23 @@ class PaymentInline(admin.TabularInline):
 
 @admin.register(Invoice)
 class InvoiceAdmin(BaseModelAdmin):
-    list_display = ('id', 'store_id', 'customer_id', 'type', 'status', 'grand_total', 'created_at')
-    search_fields = ('id', 'store_id__name', 'customer_id__mobile_number', 'customer_id__name')
-    list_filter = ('type', 'status', 'store_id', 'is_deleted', 'created_at')
+    list_display = ('invoice_number', 'store_id', 'customer_name_snapshot', 'customer_phone_snapshot', 'type', 'status', 'grand_total', 'is_tax_inclusive', 'created_at')
+    search_fields = ('invoice_number', 'store_id__name', 'customer_phone_snapshot', 'customer_name_snapshot', 'customer_id__mobile_number')
+    list_filter = ('type', 'status', 'is_tax_inclusive', 'store_id', 'is_deleted', 'created_at')
     inlines = [InvoiceItemInline, PaymentInline]
 
 
 @admin.register(InvoiceItem)
 class InvoiceItemAdmin(BaseModelAdmin):
-    list_display = ('id', 'invoice_id', 'product_id', 'quantity', 'unit_price', 'discount', 'gst_amount')
-    search_fields = ('invoice_id__id', 'product_id__name')
-    list_filter = ('is_deleted',)
+    list_display = ('id', 'invoice_id', 'product_name_snapshot', 'quantity', 'unit_price', 'tax_slab', 'gst_amount', 'line_total')
+    search_fields = ('invoice_id__invoice_number', 'product_name_snapshot', 'sku_snapshot', 'barcode_snapshot')
+    list_filter = ('tax_slab', 'is_deleted')
 
 
 @admin.register(Payment)
 class PaymentAdmin(BaseModelAdmin):
-    list_display = ('id', 'invoice_id', 'method', 'amount', 'status', 'external_transaction_id', 'created_at')
-    search_fields = ('invoice_id__id', 'external_transaction_id')
+    list_display = ('id', 'invoice_id', 'method', 'amount', 'amount_tendered', 'change_returned', 'status', 'created_at')
+    search_fields = ('invoice_id__invoice_number', 'external_transaction_id')
     list_filter = ('method', 'status', 'is_deleted', 'created_at')
 
 
