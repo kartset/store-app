@@ -11,6 +11,7 @@ import {
   Badge,
   ThemeIcon,
   Stack,
+  ScrollArea,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
@@ -237,95 +238,55 @@ export function DashboardLayout() {
           borderRight: '1px solid var(--border-subtle)',
         }}
       >
-        <Box style={{ flex: 1 }}>
+        <AppShell.Section
+          grow
+          component={ScrollArea}
+          type="hover"
+          offsetScrollbars
+          style={{ marginRight: -8, paddingRight: 8 }}
+        >
           <Text size="11px" fw={700} c="dimmed" px="xs" mb="xs" style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             Domain Navigation
           </Text>
 
-          <Stack gap={4}>
+          <Stack gap={4} pb="sm">
             <NavLink
-              label="Organizations"
-              description="Tenants & franchises"
-              leftSection={
-                <ThemeIcon size={28} radius="md" color={location.pathname === '/organizations' ? 'brand' : 'gray'} variant={location.pathname === '/organizations' ? 'filled' : 'light'}>
-                  <IconBuildingSkyscraper size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/organizations')}
-              active={location.pathname === '/organizations'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="Stores"
-              description="Retail branches & registers"
-              leftSection={
-                <ThemeIcon size={28} radius="md" color={location.pathname === '/stores' ? 'brand' : 'gray'} variant={location.pathname === '/stores' ? 'filled' : 'light'}>
-                  <IconBuildingStore size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/stores')}
-              active={location.pathname === '/stores'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="Products"
-              description="Master catalog & barcodes"
-              leftSection={
-                <ThemeIcon size={28} radius="md" color={location.pathname === '/products' ? 'brand' : 'gray'} variant={location.pathname === '/products' ? 'filled' : 'light'}>
-                  <IconPackage size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/products')}
-              active={location.pathname === '/products'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="Inventory"
-              description="Store stock & inwarding"
-              leftSection={
-                <ThemeIcon size={28} radius="md" color={location.pathname === '/inventory' ? 'brand' : 'gray'} variant={location.pathname === '/inventory' ? 'filled' : 'light'}>
-                  <IconBuildingWarehouse size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/inventory')}
-              active={location.pathname === '/inventory'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="Vendors"
-              description="Suppliers & procurement"
+              label="Analytics & BI"
+              description="Real-time sales, trends & velocity"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/vendors' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/vendors' ? 'filled' : 'light'}
+                  color={location.pathname === '/analytics' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/analytics' ? 'filled' : 'light'}
                 >
-                  <IconTruckDelivery size={16} />
+                  <IconChartBar size={16} />
                 </ThemeIcon>
               }
-              onClick={() => navigate('/vendors')}
-              active={location.pathname === '/vendors'}
+              onClick={() => navigate('/analytics')}
+              active={location.pathname === '/analytics'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Cash Register"
+              description="Shifts & Z-Reports"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/register' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/register' ? 'filled' : 'light'}
+                >
+                  <IconCoins size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/register')}
+              active={location.pathname === '/register'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -356,25 +317,42 @@ export function DashboardLayout() {
             />
 
             <NavLink
-              label="POS Counter Terminal"
-              description="Fast billing & barcode checkout"
+              label="Data Exchange"
+              description="Bulk import, dry-runs & exports"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/pos' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/pos' ? 'filled' : 'light'}
+                  color={location.pathname === '/data-exchange' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/data-exchange' ? 'filled' : 'light'}
                 >
-                  <IconCashRegister size={16} />
+                  <IconDatabaseImport size={16} />
                 </ThemeIcon>
               }
-              rightSection={
-                <Badge size="xs" color="brand" variant="filled">
-                  LIVE
-                </Badge>
+              onClick={() => navigate('/data-exchange')}
+              active={location.pathname === '/data-exchange'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Inventory"
+              description="Store stock & inwarding"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/inventory' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/inventory' ? 'filled' : 'light'}
+                >
+                  <IconBuildingWarehouse size={16} />
+                </ThemeIcon>
               }
-              onClick={() => navigate('/pos')}
-              active={location.pathname === '/pos'}
+              onClick={() => navigate('/inventory')}
+              active={location.pathname === '/inventory'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -427,20 +405,20 @@ export function DashboardLayout() {
             />
 
             <NavLink
-              label="Cash Register"
-              description="Shifts & Z-Reports"
+              label="Organizations"
+              description="Tenants & franchises"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/register' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/register' ? 'filled' : 'light'}
+                  color={location.pathname === '/organizations' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/organizations' ? 'filled' : 'light'}
                 >
-                  <IconCoins size={16} />
+                  <IconBuildingSkyscraper size={16} />
                 </ThemeIcon>
               }
-              onClick={() => navigate('/register')}
-              active={location.pathname === '/register'}
+              onClick={() => navigate('/organizations')}
+              active={location.pathname === '/organizations'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -449,20 +427,25 @@ export function DashboardLayout() {
             />
 
             <NavLink
-              label="Analytics & BI"
-              description="Real-time sales, trends & velocity"
+              label="POS Counter Terminal"
+              description="Fast billing & barcode checkout"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/analytics' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/analytics' ? 'filled' : 'light'}
+                  color={location.pathname === '/pos' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/pos' ? 'filled' : 'light'}
                 >
-                  <IconChartBar size={16} />
+                  <IconCashRegister size={16} />
                 </ThemeIcon>
               }
-              onClick={() => navigate('/analytics')}
-              active={location.pathname === '/analytics'}
+              rightSection={
+                <Badge size="xs" color="brand" variant="filled">
+                  LIVE
+                </Badge>
+              }
+              onClick={() => navigate('/pos')}
+              active={location.pathname === '/pos'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -471,20 +454,20 @@ export function DashboardLayout() {
             />
 
             <NavLink
-              label="Data Exchange"
-              description="Bulk import, dry-runs & exports"
+              label="Products"
+              description="Master catalog & barcodes"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/data-exchange' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/data-exchange' ? 'filled' : 'light'}
+                  color={location.pathname === '/products' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/products' ? 'filled' : 'light'}
                 >
-                  <IconDatabaseImport size={16} />
+                  <IconPackage size={16} />
                 </ThemeIcon>
               }
-              onClick={() => navigate('/data-exchange')}
-              active={location.pathname === '/data-exchange'}
+              onClick={() => navigate('/products')}
+              active={location.pathname === '/products'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -492,6 +475,27 @@ export function DashboardLayout() {
               }}
             />
 
+            <NavLink
+              label="Stores"
+              description="Retail branches & registers"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/stores' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/stores' ? 'filled' : 'light'}
+                >
+                  <IconBuildingStore size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/stores')}
+              active={location.pathname === '/stores'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
 
             {isOrgAdmin && (
               <NavLink
@@ -516,28 +520,52 @@ export function DashboardLayout() {
                 }}
               />
             )}
+
+            <NavLink
+              label="Vendors"
+              description="Suppliers & procurement"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/vendors' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/vendors' ? 'filled' : 'light'}
+                >
+                  <IconTruckDelivery size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/vendors')}
+              active={location.pathname === '/vendors'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
           </Stack>
-        </Box>
+        </AppShell.Section>
 
         {/* Sidebar Footer Info */}
-        <Box
-          p="sm"
-          style={{
-            backgroundColor: 'var(--bg-surface-subtle)',
-            borderRadius: '10px',
-            border: '1px solid var(--border-subtle)',
-          }}
-        >
-          <Group gap="xs" mb={4}>
-            <IconSparkles size={14} color="var(--brand-primary)" />
-            <Text size="xs" fw={700}>
-              System Status
+        <AppShell.Section pt="sm" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+          <Box
+            p="sm"
+            style={{
+              backgroundColor: 'var(--bg-surface-subtle)',
+              borderRadius: '10px',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <Group gap="xs" mb={4}>
+              <IconSparkles size={14} color="var(--brand-primary)" />
+              <Text size="xs" fw={700}>
+                System Status
+              </Text>
+            </Group>
+            <Text size="11px" c="dimmed">
+              All stores synchronized with PostgreSQL linear ledger.
             </Text>
-          </Group>
-          <Text size="11px" c="dimmed">
-            All stores synchronized with PostgreSQL linear ledger.
-          </Text>
-        </Box>
+          </Box>
+        </AppShell.Section>
       </AppShell.Navbar>
 
       {/* Main Content Area */}
