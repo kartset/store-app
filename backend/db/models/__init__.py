@@ -15,3 +15,4 @@ from .delivery import *
 from .user import *
 from .register import *
 from .credit_note import *
+from .gst import *
