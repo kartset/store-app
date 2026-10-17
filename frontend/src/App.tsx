@@ -12,6 +12,7 @@ import { InvoiceList } from './features/invoice/components/InvoiceList';
 import { POSTerminal } from './features/pos/components/POSTerminal';
 import { RegisterDashboard } from './features/register/components/RegisterDashboard';
 import { OrderList } from './features/orders';
+import { AnalyticsDashboard } from './features/analytics';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
         <Route path="pos" element={<POSTerminal />} />
         <Route path="register" element={<RegisterDashboard />} />
         <Route path="orders" element={<OrderList />} />
+        <Route path="analytics" element={<AnalyticsDashboard />} />
       </Route>
 
       
