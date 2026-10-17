@@ -370,3 +370,200 @@ class InvoiceAPICheckoutTests(TestCase):
         self.assertEqual(search_no.status_code, status.HTTP_200_OK)
         results_no = search_no.data.get('results', search_no.data) if isinstance(search_no.data, dict) else search_no.data
         self.assertEqual(len(results_no), 1)
+
+
+class SalesReturnAndCreditNoteTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.org = Organization.objects.create(name='FreshGrocer Corp', subdomain='freshgrocer')
+        self.store = Store.objects.create(
+            organization_id=self.org,
+            name='Koramangala Store',
+            gst_number='29XYZAB1234C1Z9',
+            is_active=True
+        )
+
+        self.customer = Customer.objects.create(
+            mobile_number='9876543210',
+            name='Rahul Dravid',
+            customer_type=CustomerType.RETAIL
+        )
+        self.store_customer = StoreCustomer.objects.create(
+            store_id=self.store,
+            customer_id=self.customer,
+            loyalty_points=50,
+            store_credit_balance=Decimal('0.00')
+        )
+
+        self.product_1 = Product.objects.create(
+            organization_id=self.org,
+            name='Organic Green Tea 100g',
+            sku='TEA-001',
+            base_mrp=Decimal('200.00'),
+            tax_slab=Decimal('12.00')
+        )
+        self.inv_1 = Inventory.objects.create(
+            store_id=self.store,
+            product_id=self.product_1,
+            stock_quantity=20,
+            store_price=Decimal('200.00')
+        )
+
+    def test_process_full_return_with_cash_refund(self):
+        """Verifies full return restocks inventory, reverses taxes, and logs CreditNote."""
+        # 1. Checkout an invoice for 2 items
+        res = self.client.post('/api/invoices/', {
+            "store_id": str(self.store.id),
+            "customer_id": str(self.customer.id),
+            "customer_phone": "9876543210",
+            "items": [{"product_id": str(self.product_1.id), "quantity": 2, "unit_price": "200.00"}],
+            "payments": [{"method": "CASH", "amount": "400.00"}]
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        invoice_id = res.data['id']
+        invoice_item_id = res.data['items'][0]['id']
+
+        self.inv_1.refresh_from_db()
+        self.assertEqual(self.inv_1.stock_quantity, 18)
+
+        # 2. Process Return for 2 items
+        ret_res = self.client.post(f'/api/invoices/{invoice_id}/return/', {
+            "items": [{
+                "invoice_item_id": invoice_item_id,
+                "quantity": 2,
+                "restock_inventory": True,
+                "reason": "CUSTOMER_DISSATISFACTION"
+            }],
+            "refund_method": "CASH",
+            "reason": "CUSTOMER_DISSATISFACTION",
+            "notes": "Customer returned unopened boxes"
+        }, format='json')
+
+        self.assertEqual(ret_res.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(ret_res.data['credit_note_number'].startswith("CN-KORA-"))
+        self.assertEqual(Decimal(str(ret_res.data['total_refund_amount'])), Decimal('400.00'))
+
+        # 3. Check inventory was restocked back to 20
+        self.inv_1.refresh_from_db()
+        self.assertEqual(self.inv_1.stock_quantity, 20)
+
+        # 4. Check StockMovement audit record
+        movement = StockMovement.objects.filter(
+            inventory_id=self.inv_1,
+            movement_type=StockMovementType.RETURN_RESTOCK
+        ).latest('created_at')
+        self.assertEqual(movement.quantity_delta, 2)
+        self.assertEqual(movement.quantity_after, 20)
+
+    def test_partial_return_and_prevent_over_return(self):
+        """Verifies partial return works and prevents returning more than bought."""
+        # Checkout 5 items
+        res = self.client.post('/api/invoices/', {
+            "store_id": str(self.store.id),
+            "items": [{"product_id": str(self.product_1.id), "quantity": 5, "unit_price": "200.00"}],
+            "payments": [{"method": "CASH", "amount": "1000.00"}]
+        }, format='json')
+        invoice_id = res.data['id']
+        invoice_item_id = res.data['items'][0]['id']
+
+        # Return 2 items -> should succeed
+        ret_1 = self.client.post(f'/api/invoices/{invoice_id}/return/', {
+            "items": [{
+                "invoice_item_id": invoice_item_id,
+                "quantity": 2,
+                "restock_inventory": True
+            }],
+            "refund_method": "CASH"
+        }, format='json')
+        self.assertEqual(ret_1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Decimal(str(ret_1.data['total_refund_amount'])), Decimal('400.00'))
+
+        # Return 4 items -> should fail because only 3 remain returnable
+        ret_over = self.client.post(f'/api/invoices/{invoice_id}/return/', {
+            "items": [{
+                "invoice_item_id": invoice_item_id,
+                "quantity": 4,
+                "restock_inventory": True
+            }],
+            "refund_method": "CASH"
+        }, format='json')
+        self.assertEqual(ret_over.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Maximum returnable quantity is 3", str(ret_over.data))
+
+        # Return remaining 3 items -> should succeed
+        ret_2 = self.client.post(f'/api/invoices/{invoice_id}/return/', {
+            "items": [{
+                "invoice_item_id": invoice_item_id,
+                "quantity": 3,
+                "restock_inventory": True
+            }],
+            "refund_method": "CASH"
+        }, format='json')
+        self.assertEqual(ret_2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Decimal(str(ret_2.data['total_refund_amount'])), Decimal('600.00'))
+
+    def test_return_with_store_credit_refund(self):
+        """Verifies returning with STORE_CREDIT adds to customer store_credit_balance."""
+        res = self.client.post('/api/invoices/', {
+            "store_id": str(self.store.id),
+            "customer_id": str(self.customer.id),
+            "customer_phone": "9876543210",
+            "items": [{"product_id": str(self.product_1.id), "quantity": 1, "unit_price": "200.00"}],
+            "payments": [{"method": "CASH", "amount": "200.00"}]
+        }, format='json')
+        invoice_id = res.data['id']
+        invoice_item_id = res.data['items'][0]['id']
+
+        ret_res = self.client.post(f'/api/invoices/{invoice_id}/return/', {
+            "items": [{
+                "invoice_item_id": invoice_item_id,
+                "quantity": 1,
+                "restock_inventory": True
+            }],
+            "refund_method": "STORE_CREDIT"
+        }, format='json')
+        self.assertEqual(ret_res.status_code, status.HTTP_201_CREATED)
+
+        self.store_customer.refresh_from_db()
+        self.assertEqual(self.store_customer.store_credit_balance, Decimal('200.00'))
+
+    def test_cannot_return_cancelled_invoice(self):
+        """Verifies returns are blocked on cancelled invoices."""
+        res = self.client.post('/api/invoices/', {
+            "store_id": str(self.store.id),
+            "items": [{"product_id": str(self.product_1.id), "quantity": 1, "unit_price": "200.00"}],
+            "payments": [{"method": "CASH", "amount": "200.00"}]
+        }, format='json')
+        invoice_id = res.data['id']
+        invoice_item_id = res.data['items'][0]['id']
+
+        # Cancel first
+        self.client.post(f'/api/invoices/{invoice_id}/cancel/')
+
+        # Try to return
+        ret_res = self.client.post(f'/api/invoices/{invoice_id}/return/', {
+            "items": [{"invoice_item_id": invoice_item_id, "quantity": 1}]
+        }, format='json')
+        self.assertEqual(ret_res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Cannot return items on a cancelled invoice", str(ret_res.data))
+
+    def test_credit_notes_list_endpoint(self):
+        """Verifies GET /api/credit-notes/ endpoint lists credit notes with filtering."""
+        res = self.client.post('/api/invoices/', {
+            "store_id": str(self.store.id),
+            "items": [{"product_id": str(self.product_1.id), "quantity": 1, "unit_price": "200.00"}],
+            "payments": [{"method": "CASH", "amount": "200.00"}]
+        }, format='json')
+        invoice_id = res.data['id']
+        invoice_item_id = res.data['items'][0]['id']
+
+        self.client.post(f'/api/invoices/{invoice_id}/return/', {
+            "items": [{"invoice_item_id": invoice_item_id, "quantity": 1}]
+        }, format='json')
+
+        # List credit notes
+        cn_res = self.client.get(f'/api/credit-notes/?store_id={self.store.id}')
+        self.assertEqual(cn_res.status_code, status.HTTP_200_OK)
+        results = cn_res.data.get('results', cn_res.data) if isinstance(cn_res.data, dict) else cn_res.data
+        self.assertEqual(len(results), 1)
+        self.assertEqual(str(results[0]['invoice_id']), str(invoice_id))

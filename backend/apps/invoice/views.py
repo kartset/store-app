@@ -11,13 +11,18 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.invoice.serializers import (
+    CreditNoteSerializer,
     InvoiceCheckoutSerializer,
     InvoiceSerializer,
+    SalesReturnRequestSerializer,
 )
 from db.models import (
     CashRegisterSession,
     CashTransaction,
     CashTransactionType,
+    CreditNote,
+    CreditNoteItem,
+    CreditNoteStatus,
     Customer,
     Inventory,
     Invoice,
@@ -27,7 +32,9 @@ from db.models import (
     Payment,
     PaymentMethod,
     Product,
+    RefundMethod,
     RegisterSessionStatus,
+    ReturnReason,
     StockMovementType,
     Store,
     StoreCustomer,
@@ -437,6 +444,201 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         return Response(InvoiceSerializer(invoice).data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'], url_path='return')
+    @transaction.atomic
+    def process_return(self, request, pk=None):
+        """
+        Processes sales return for an invoice:
+        - Validates returnable quantity per item
+        - Restocks store inventory via StockMovement (type: RETURN_RESTOCK)
+        - Computes proportional GST (CGST, SGST, IGST) and line discount reversals
+        - Generates sequential Credit Note (CN-STORE-YYYYMMDD-SEQ)
+        - Issues refund (Cash drawer outflow, Store Credit wallet balance, or UPI)
+        - Revokes pro-rata customer loyalty points
+        """
+        invoice = self.get_object()
+        if invoice.status == InvoiceStatus.CANCELLED:
+            raise ValidationError("Cannot return items on a cancelled invoice.")
+
+        serializer = SalesReturnRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        return_rows = data['items']
+        refund_method = data.get('refund_method', RefundMethod.CASH)
+        return_reason = data.get('reason', ReturnReason.CUSTOMER_DISSATISFACTION)
+        notes = data.get('notes', '')
+
+        # 1. Validate items and returnable quantities
+        items_to_process = []
+        for r_item in return_rows:
+            try:
+                inv_item = invoice.items.select_for_update().get(
+                    id=r_item['invoice_item_id'],
+                    is_deleted=False
+                )
+            except InvoiceItem.DoesNotExist:
+                raise ValidationError(
+                    f"Item with ID '{r_item['invoice_item_id']}' does not belong to invoice '{invoice.invoice_number}'."
+                )
+
+            return_qty = r_item['quantity']
+            already_returned = sum(
+                inv_item.return_items.filter(
+                    credit_note_id__status=CreditNoteStatus.COMPLETED,
+                    is_deleted=False
+                ).values_list('quantity', flat=True)
+            )
+            max_returnable = inv_item.quantity - already_returned
+
+            if return_qty > max_returnable:
+                raise ValidationError(
+                    f"Cannot return {return_qty} of '{inv_item.product_name_snapshot}'. "
+                    f"Maximum returnable quantity is {max_returnable} (Original: {inv_item.quantity}, Already Returned: {already_returned})."
+                )
+
+            items_to_process.append({
+                'inv_item': inv_item,
+                'quantity': return_qty,
+                'restock': r_item.get('restock_inventory', True),
+                'reason': r_item.get('reason', return_reason),
+            })
+
+        # 2. Check active cash register session if cash refund is chosen
+        active_session = CashRegisterSession.objects.filter(
+            store_id=invoice.store_id,
+            status=RegisterSessionStatus.OPEN,
+            is_deleted=False
+        ).first()
+
+        # 3. Create Credit Note record
+        credit_note = CreditNote.objects.create(
+            store_id=invoice.store_id,
+            invoice_id=invoice,
+            customer_id=invoice.customer_id,
+            register_session_id=active_session,
+            status=CreditNoteStatus.COMPLETED,
+            refund_method=refund_method,
+            reason=return_reason,
+            notes=notes,
+            processed_by=request.user if request.user.is_authenticated else None,
+        )
+
+        total_subtotal = Decimal('0.00')
+        total_discount_rev = Decimal('0.00')
+        total_cgst = Decimal('0.00')
+        total_sgst = Decimal('0.00')
+        total_igst = Decimal('0.00')
+        total_gst = Decimal('0.00')
+        total_refund = Decimal('0.00')
+
+        # 4. Process line returns & inventory restock
+        for row in items_to_process:
+            inv_item = row['inv_item']
+            qty = row['quantity']
+            restock = row['restock']
+            reason = row['reason']
+
+            ratio = Decimal(str(qty)) / Decimal(str(inv_item.quantity))
+
+            line_discount = (inv_item.discount * ratio).quantize(Decimal('0.01'))
+            line_taxable = (inv_item.taxable_amount * ratio).quantize(Decimal('0.01'))
+            line_cgst = (inv_item.cgst_amount * ratio).quantize(Decimal('0.01'))
+            line_sgst = (inv_item.sgst_amount * ratio).quantize(Decimal('0.01'))
+            line_igst = (inv_item.igst_amount * ratio).quantize(Decimal('0.01'))
+            line_gst = line_cgst + line_sgst + line_igst
+            line_refund = (inv_item.line_total * ratio).quantize(Decimal('0.01'))
+
+            CreditNoteItem.objects.create(
+                credit_note_id=credit_note,
+                invoice_item_id=inv_item,
+                product_id=inv_item.product_id,
+                product_name_snapshot=inv_item.product_name_snapshot,
+                sku_snapshot=inv_item.sku_snapshot,
+                hsn_code=inv_item.hsn_code,
+                quantity=qty,
+                unit_price=inv_item.unit_price,
+                discount_reversed=line_discount,
+                tax_slab=inv_item.tax_slab,
+                taxable_amount=line_taxable,
+                cgst_amount=line_cgst,
+                sgst_amount=line_sgst,
+                igst_amount=line_igst,
+                gst_amount=line_gst,
+                refund_amount=line_refund,
+                restock_inventory=restock,
+                reason=reason,
+            )
+
+            total_subtotal += line_taxable
+            total_discount_rev += line_discount
+            total_cgst += line_cgst
+            total_sgst += line_sgst
+            total_igst += line_igst
+            total_gst += line_gst
+            total_refund += line_refund
+
+            # Restock inventory if requested
+            if restock:
+                try:
+                    inv = Inventory.objects.select_for_update().get(
+                        store_id=invoice.store_id,
+                        product_id=inv_item.product_id,
+                        is_deleted=False
+                    )
+                    inv.adjust_stock(
+                        quantity_delta=qty,
+                        movement_type=StockMovementType.RETURN_RESTOCK,
+                        reason=f"Customer Return via Credit Note #{credit_note.credit_note_number}",
+                        reference_id=str(credit_note.credit_note_number),
+                    )
+                except Inventory.DoesNotExist:
+                    pass
+
+        credit_note.subtotal = total_subtotal
+        credit_note.total_discount_reversed = total_discount_rev
+        credit_note.cgst_amount = total_cgst
+        credit_note.sgst_amount = total_sgst
+        credit_note.igst_amount = total_igst
+        credit_note.total_gst = total_gst
+        credit_note.total_refund_amount = total_refund
+
+        # 5. Revoke proportional loyalty points & adjust store credit
+        store_customer = None
+        if invoice.customer_id:
+            store_customer = StoreCustomer.objects.filter(
+                store_id=invoice.store_id,
+                customer_id=invoice.customer_id
+            ).first()
+
+            if store_customer:
+                points_to_revoke = int(total_refund // Decimal('100.00'))
+                if points_to_revoke > 0:
+                    store_customer.loyalty_points = max(0, store_customer.loyalty_points - points_to_revoke)
+                    credit_note.loyalty_points_deducted = points_to_revoke
+
+                if refund_method == RefundMethod.STORE_CREDIT:
+                    store_customer.store_credit_balance += total_refund
+
+                store_customer.save()
+
+        # 6. Record Cash Drawer Outflow if Cash refund
+        if refund_method == RefundMethod.CASH and active_session:
+            active_session.expected_cash -= total_refund
+            active_session.save()
+            CashTransaction.objects.create(
+                session_id=active_session,
+                type=CashTransactionType.CASH_REFUND,
+                amount=total_refund,
+                invoice_id=invoice,
+                reason=f"Cash Refund for Credit Note #{credit_note.credit_note_number}",
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+
+        credit_note.save()
+
+        return Response(CreditNoteSerializer(credit_note).data, status=status.HTTP_201_CREATED)
+
     @action(detail=False, methods=['get'], url_path='summary')
     def daily_summary(self, request):
         """
@@ -489,3 +691,38 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 'upi': upi_total,
             }
         })
+
+
+class CreditNoteViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Audit & Query ViewSet for Credit Notes and Sales Returns.
+    """
+    queryset = CreditNote.objects.filter(is_deleted=False).select_related(
+        'store_id', 'invoice_id', 'customer_id', 'register_session_id'
+    ).prefetch_related('items__product_id').order_by('-created_at')
+    serializer_class = CreditNoteSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        store_id = self.request.query_params.get('store_id')
+        if store_id:
+            qs = qs.filter(store_id=store_id)
+
+        invoice_id = self.request.query_params.get('invoice_id')
+        if invoice_id:
+            qs = qs.filter(invoice_id=invoice_id)
+
+        customer_id = self.request.query_params.get('customer_id')
+        if customer_id:
+            qs = qs.filter(customer_id=customer_id)
+
+        search = self.request.query_params.get('search')
+        if search:
+            search = search.strip()
+            qs = qs.filter(
+                Q(credit_note_number__icontains=search) |
+                Q(invoice_id__invoice_number__icontains=search)
+            )
+
+        return qs
