@@ -7,7 +7,8 @@ This document defines the strategic implementation plan, module dependency graph
 ## 🎯 Executive Summary & Sequencing Strategy
 
 ### The Golden Rule: Eliminate Developer Friction
-In enterprise retail ERP & POS systems, the transactional engine (Invoicing, POS, Payments) sits downstream of **Master Data** (Products, Vendors, Customers) and **Operational Inventory**. 
+
+In enterprise retail ERP & POS systems, the transactional engine (Invoicing, POS, Payments) sits downstream of **Master Data** (Products, Vendors, Customers) and **Operational Inventory**.
 
 Building Master Catalog, Categories, and Store Inventory first eliminated mock data and established strict transactional integrity.
 
@@ -21,14 +22,14 @@ flowchart TD
         BASE["Organizations & Store Shell"]
     end
 
-    subgraph P1 ["Phase 1: Master Catalog & Directories (IN PROGRESS)"]
+    subgraph P1 ["Phase 1: Master Catalog & Directories (COMPLETED)"]
         PROD["Products & 4-Tier Master Catalog (COMPLETED: STOREAPP-38, 39, 40)"]
         INV["Store Inventory & GRN (COMPLETED: STOREAPP-37)"]
-        VEND["Vendor Module (STOREAPP-13) (NEXT FOCUS)"]
-        CUST["Customer Module (STOREAPP-12)"]
+        VEND["Vendor Module (COMPLETED: STOREAPP-42, 43, 44, 45)"]
+        CUST["Customer Module (COMPLETED: STOREAPP-46, 47, 48, 49)"]
     end
 
-    subgraph P3 ["Phase 3: Core Transactional Engine"]
+    subgraph P3 ["Phase 3: Core Transactional Engine (CURRENT FOCUS)"]
         INVOICE["Invoicing Module (STOREAPP-2) - GST & Calculations"]
         POS["POS Module (STOREAPP-16) - Cashier UI & Barcode"]
         PAY["Payments Module (STOREAPP-17) - Split & Razorpay"]
@@ -58,6 +59,7 @@ flowchart TD
 ## 📦 Delivered Modules Summary
 
 ### 1. Products & 4-Tier Master Catalog (COMPLETED — STOREAPP-38, 39, 40)
+
 - **4-Tier Architecture**:
   1. `CatalogueItem`: Global Product Register curated at platform level with universal barcodes, HSN, and GST slabs.
   2. `Product`: Organization master product catalog.
@@ -70,6 +72,7 @@ flowchart TD
 - **Category Taxonomy**: Multi-level hierarchical categories (`Category`) and tenant-scoped subcategories (`Subcategory`).
 
 ### 2. Store Stock & Operations / Inventory (COMPLETED — STOREAPP-37)
+
 - **Inventory View (`/inventory`)**: Live store picker, KPI cards (Total Products, Units in Stock, Low Stock, Out of Stock, Inventory Value).
 - **Goods Receipt Note (GRN) Inwarding**: Multi-item stock receiving drawer with batch, cost price, store price overrides, and reference tracking.
 - **Stock Adjustment Modal**: Increment/decrement stock with operational reasons (Waste/Damage, Return Restock, Audit Adjustment).
@@ -77,40 +80,65 @@ flowchart TD
 
 ---
 
-## 📋 Active & Upcoming Module Requirements
+### 3. Vendor Module (COMPLETED — STOREAPP-13: 42, 43, 44, 45)
 
-### 3. Vendor Module (`STOREAPP-13` — Current Focus)
-* **Plane Item**: `STOREAPP-13`
-* **Ownership**: Organization-level (Suppliers & Distributors)
-* **Requirements**:
-  1. **Vendor Profile**: Legal Business Name, Trade Name, GSTIN (15-char with regex validation), PAN (auto-extracted), Contact Person Name, Email, Primary Phone Number, Billing/Shipping Address with 2-digit GST State Code.
-  2. **Payment Terms**: Commercial credit terms (`COD`, `PREPAID`, `NET_7`, `NET_15`, `NET_30`, `NET_45`, `NET_60`) and credit limit.
-  3. **Vendor Product Catalog (`VendorProduct`)**: Links which products a vendor supplies, vendor SKU, negotiated purchase price, lead time, and MOQ.
-  4. **Inwarding Integration**: Link vendor directly to Goods Receipt Notes (GRN) during stock inwarding in `/inventory`.
-  5. **APIs**:
-     - `GET /api/vendors/` (filter by active status, search by name/GSTIN/phone)
-     - `POST /api/vendors/` (create vendor profile with GSTIN validation)
-     - `GET/PUT/DELETE /api/vendors/<id>/`
-     - `GET /api/vendors/<id>/products/` (list supplied products & pricing)
-  6. **Frontend UI**:
-     - Vendor directory with GST status pills, payment terms badges, and quick contact links.
-     - Sectioned Vendor Drawer (General Info, GST & Compliance, Contact & Address, Bank Details & Credit Terms).
+- **Vendor Master & Compliance**: Tenant-scoped vendors with legal name, trade name, 15-digit GSTIN validation, auto PAN extraction, payment terms (`COD`, `PREPAID`, `NET_15`, `NET_30`, etc.), credit limits, and full address.
+- **Vendor Directory UI (`/vendors`)**: Searchable directory with GST status pills, payment terms badges, bank details, and active status toggling.
+- **Vendor-Product Sourcing Catalog (`VendorProduct`)**: Multi-vendor price comparison per product with vendor SKU, agreed unit cost, MOQ, lead times, and primary vendor tagging.
+- **Direct GRN Integration**: Inwarding drawer integrates directly with active vendors, pre-populating purchase costs and vendor invoices on stock receiving.
+
+### 4. Customer & Loyalty Module (COMPLETED — STOREAPP-12: 46, 47, 48, 49)
+
+- **2-Tier Identity Architecture**:
+  - `Customer`: Global tenant customer identity anchored on unique 10-digit mobile number, full name, B2C vs B2B classification, GSTIN, PAN, and birthday/anniversary milestones.
+  - `StoreCustomer`: Store-specific relationship tracking store visit frequency, store loyalty points balance, credit limit (khata), and outstanding balance.
+- **Customer Directory UI (`/customers`)**: Summary metrics (Total Customers, B2B Clients, Total Loyalty Points, Average Visits), customer type filters, search by phone/name/GSTIN, and CSV export.
+- **Customer 360 Profile & Purchase Drawer**: Lifetime customer value strip, chronological receipt history with itemized product breakdowns, store branch loyalty cards, and compliance details.
+- **POS Fast Phone Lookup (`POSCustomerLookup`)**: Sub-50ms phone lookup with automated phone formatting (`+91`, leading zeros), auto-select, and walk-in fallback.
+- **Fast Counter Inline Registration (`QuickAddCustomerModal`)**: 4-field instant counter signup without cashier screen disruptions.
+- **Loyalty Redemption Calculator**: Points redemption slider with smart ceiling based on store point balance and gross bill total, syncing net payable discounts to billing.
 
 ---
 
-### 4. Customer Module (`STOREAPP-12` — Next Up)
-* **Plane Item**: `STOREAPP-12`
-* **Ownership**: 2-Tier Architecture (Global `Customer` + Store `StoreCustomer`)
-* **Requirements**:
-  1. **Global Customer Identity**: Phone Number (unique anchor, 10-digit normalized), Full Name, Email.
-  2. **Store Customer Association (`StoreCustomer`)**: Store FK, Customer FK, Total Spend, Visit Count, Loyalty Points Balance, Store Credit / Khata Balance, First Visit & Last Visit Timestamps.
-  3. **High-Speed Phone Lookup**: POS-optimized lookup endpoint returning customer info + store loyalty summary in < 50ms.
-  4. **Auto-Enrollment**: If phone number scanned/typed at checkout does not exist, system auto-creates a guest profile without blocking cashier flow.
-  5. **APIs**:
-     - `GET /api/customers/` (search by phone or name)
-     - `GET /api/customers/lookup/?phone=9876543210` (fast POS lookup)
-     - `POST /api/customers/` (create/register customer)
-     - `GET /api/customers/<id>/history/` (view past invoices and credits)
-  6. **Frontend UI**:
-     - Customer directory with spend, visit counts, and loyalty points.
-     - Customer Detail Drawer with transaction history.
+## 📋 Active & Upcoming Module Requirements
+
+### 5. Invoicing Module (`STOREAPP-2` — Active Focus)
+
+- **Plane Item**: `STOREAPP-2`
+- **Ownership**: Store-level & POS checkout engine
+- **Key Requirements**:
+  1. **GST Compliant Calculations**: HSN-wise tax breakdown, CGST + SGST (intra-state) vs IGST (inter-state) computation based on store vs customer state codes.
+  2. **Multi-Item Line Pricing**: Unit price, line discounts, tax amounts, line net totals, round-off calculation.
+  3. **Invoice Types**: `POS` (Counter Sale), `ONLINE` (Ecommerce), `RETURN` (Credit Note / Return Receipt).
+  4. **Invoice State Machine**: `DRAFT` ➔ `PAID` ➔ `CANCELLED`.
+  5. **Atomic Stock Reduction**: Completing an invoice atomically triggers `StockMovement` reduction in store `Inventory`.
+
+### 6. Point of Sale (POS) Module (`STOREAPP-16`)
+
+- **Plane Item**: `STOREAPP-16`
+- **Key Requirements**:
+  1. High-speed cashier UI optimized for keyboard shortcuts (F1-F12, Enter, Esc).
+  2. Barcode scanner listener (`barcode` and `internal_barcode`).
+  3. Integration with `POSCustomerLookup` for loyalty discount calculation.
+  4. Thermal receipt printing (80mm / 58mm POS receipt layout).
+
+### 7. Payments Module (`STOREAPP-17`)
+
+- **Plane Item**: `STOREAPP-17`
+- **Key Requirements**:
+  1. Split payments across multiple tenders (Cash, Card, UPI, Store Credit).
+  2. Razorpay POS / Dynamic UPI QR code generation.
+  3. Cash change calculator for cashiers.
+
+---
+
+## 🔮 Future Work & Architectural Extensions
+
+### 8. Central Warehouse Management System (WMS) & Commercial Hub-and-Spoke Replenishment
+
+As the retail footprint scales from isolated shops to a multi-echelon retail chain, the platform will introduce a dedicated **Central Warehouse Management & Replenishment Module**. Beyond basic physical stock movement, this architecture encompasses central bulk vendor procurement (maximizing supplier bulk discounts), 3-stage stock transfer orders (`REQUESTED` ➔ `APPROVED` ➔ `IN_TRANSIT` ➔ `RECEIVED`), in-transit shrinkage and damage reconciliation, and **commercial settlement models** tailored to store ownership:
+
+- **Company-Owned (COCO)**: Weighted-average cost transfers governed by GST Rule 55 Delivery Challans and highway e-Way bills without cash friction.
+- **Franchise Outlets (FOFO/FOCO)**: Internal B2B wholesale billing at distributor price (DP), store credit limits (khata ledger), payment collection terms (`NET_7`, `NET_15`, `NET_30`, POS sales sweep), and automated Credit Notes for transit shortages.
+
+_For the complete end-to-end operational, financial, and schema specification, refer to the master architecture document in [`docs/future work/retail_warehouse_management_blueprint.md`](file:///Users/kartiksetia/work/new_projects/store-app/docs/future%20work/retail_warehouse_management_blueprint.md)._
