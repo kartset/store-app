@@ -20,6 +20,11 @@ RUN uv sync --frozen
 # Copy the rest of the backend source
 COPY backend/ ./
 
+# Copy entrypoint script
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Run server
 EXPOSE 8000
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uv", "run", "manage.py", "runserver", "0.0.0.0:8000"]
