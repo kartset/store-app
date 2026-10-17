@@ -35,11 +35,13 @@ import {
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
+import { CopilotDrawer, useCopilotStore } from '../../features/copilot';
 
 export function DashboardLayout() {
   const [opened, { toggle }] = useDisclosure();
   const navigate = useNavigate();
   const location = useLocation();
+  const { openDrawer } = useCopilotStore();
 
   // Retrieve authenticated user and active store from localStorage
   const user = useMemo(() => {
@@ -192,6 +194,17 @@ export function DashboardLayout() {
               Counter POS
             </Button>
 
+            <Button
+              size="xs"
+              variant="gradient"
+              gradient={{ from: 'indigo', to: 'violet', deg: 45 }}
+              leftSection={<IconSparkles size={15} />}
+              onClick={openDrawer}
+              style={{ fontWeight: 700, boxShadow: 'var(--shadow-xs)' }}
+            >
+              AI Copilot
+            </Button>
+
             {/* User Profile Pill */}
             <Group gap="xs" style={{ paddingLeft: '8px', borderLeft: '1px solid var(--border-subtle)' }}>
               <Avatar
@@ -251,6 +264,28 @@ export function DashboardLayout() {
           </Text>
 
           <Stack gap={4} pb="sm">
+            <NavLink
+              label="AI & MCP Settings"
+              description="LLM gateway, models & tools"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/ai-settings' ? 'indigo' : 'gray'}
+                  variant={location.pathname === '/ai-settings' ? 'filled' : 'light'}
+                >
+                  <IconSparkles size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/ai-settings')}
+              active={location.pathname === '/ai-settings'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
             <NavLink
               label="Analytics & BI"
               description="Real-time sales, trends & velocity"
@@ -619,6 +654,9 @@ export function DashboardLayout() {
           <Outlet />
         </Box>
       </AppShell.Main>
+
+      {/* Global AI Copilot Floating Drawer */}
+      <CopilotDrawer />
     </AppShell>
   );
 }
