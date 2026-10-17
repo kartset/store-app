@@ -27,6 +27,7 @@ import {
   IconReceipt,
   IconCashRegister,
   IconCoins,
+  IconShoppingCart,
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
@@ -394,6 +395,28 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/invoices')}
               active={location.pathname === '/invoices'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Orders & Delivery"
+              description="Click & collect, shipping & hold"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/orders' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/orders' ? 'filled' : 'light'}
+                >
+                  <IconShoppingCart size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/orders')}
+              active={location.pathname === '/orders'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,

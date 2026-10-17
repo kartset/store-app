@@ -11,6 +11,7 @@ import { CustomerList } from './features/customers/components/CustomerList';
 import { InvoiceList } from './features/invoice/components/InvoiceList';
 import { POSTerminal } from './features/pos/components/POSTerminal';
 import { RegisterDashboard } from './features/register/components/RegisterDashboard';
+import { OrderList } from './features/orders';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
         <Route path="invoices" element={<InvoiceList />} />
         <Route path="pos" element={<POSTerminal />} />
         <Route path="register" element={<RegisterDashboard />} />
+        <Route path="orders" element={<OrderList />} />
       </Route>
 
       
