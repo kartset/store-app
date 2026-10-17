@@ -9,6 +9,7 @@ import {
   Group,
   Loader,
   Paper,
+  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
@@ -28,16 +29,18 @@ import {
   IconFileInvoice,
   IconPrinter,
   IconReceipt,
+  IconReceiptRefund,
   IconRefresh,
   IconSearch,
   IconTrendingUp,
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
-import { useDailySummary, useInvoices } from '../api';
+import { useCreditNotes, useDailySummary, useInvoices } from '../api';
 import { useStores } from '../../stores/api';
 import { InvoiceDetailsDrawer } from './InvoiceDetailsDrawer';
 import { ThermalReceiptModal } from './ThermalReceiptModal';
-import type { Invoice, InvoiceStatus, InvoiceType } from '../types';
+import { ThermalCreditNoteModal } from './ThermalCreditNoteModal';
+import type { CreditNote, Invoice, InvoiceStatus, InvoiceType } from '../types';
 
 export function InvoiceList() {
   const navigate = useNavigate();
@@ -81,6 +84,16 @@ export function InvoiceList() {
   const { data: invoices, isLoading, refetch } = useInvoices(filterParams);
   const { data: summary, refetch: refetchSummary } = useDailySummary(activeStoreId || undefined);
 
+  // Active Tab & Credit Notes
+  const [activeTab, setActiveTab] = useState<'invoices' | 'credit_notes'>('invoices');
+  const [creditNoteModalOpen, setCreditNoteModalOpen] = useState(false);
+  const [selectedCreditNote, setSelectedCreditNote] = useState<CreditNote | null>(null);
+
+  const { data: creditNotes, isLoading: creditNotesLoading, refetch: refetchCreditNotes } = useCreditNotes({
+    store_id: activeStoreId || undefined,
+    search: search.trim() || undefined,
+  });
+
   // Drawers and Modals
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
@@ -95,6 +108,11 @@ export function InvoiceList() {
   const handleOpenReceipt = (invoice: Invoice) => {
     setReceiptTarget(invoice);
     setReceiptModalOpen(true);
+  };
+
+  const handleOpenCreditNote = (cn: CreditNote) => {
+    setSelectedCreditNote(cn);
+    setCreditNoteModalOpen(true);
   };
 
   const getStatusBadge = (status: string) => {
@@ -278,8 +296,50 @@ export function InvoiceList() {
           </SimpleGrid>
         </Paper>
 
-        {/* Invoices Data Table */}
-        <Paper withBorder radius="md">
+        {/* Navigation Tabs & Actions */}
+        <Group justify="space-between" align="center" wrap="wrap">
+          <SegmentedControl
+            value={activeTab}
+            onChange={(val) => setActiveTab(val as 'invoices' | 'credit_notes')}
+            data={[
+              {
+                value: 'invoices',
+                label: (
+                  <Group gap={6}>
+                    <IconFileInvoice size={14} />
+                    <span>Invoices ({invoices?.length || 0})</span>
+                  </Group>
+                ),
+              },
+              {
+                value: 'credit_notes',
+                label: (
+                  <Group gap={6}>
+                    <IconReceiptRefund size={14} />
+                    <span>Credit Notes / Returns ({creditNotes?.length || 0})</span>
+                  </Group>
+                ),
+              },
+            ]}
+          />
+
+          <Button
+            size="xs"
+            variant="subtle"
+            leftSection={<IconRefresh size={14} />}
+            onClick={() => {
+              refetch();
+              refetchCreditNotes();
+              refetchSummary();
+            }}
+          >
+            Refresh Data
+          </Button>
+        </Group>
+
+        {activeTab === 'invoices' ? (
+          /* Invoices Data Table */
+          <Paper withBorder radius="md">
           {isLoading ? (
             <Center py="xl">
               <Loader color="brand" />
@@ -428,6 +488,149 @@ export function InvoiceList() {
             </Table>
           )}
         </Paper>
+        ) : (
+          /* Credit Notes / Sales Returns Data Table */
+          <Paper withBorder radius="md">
+            {creditNotesLoading ? (
+              <Center py="xl">
+                <Loader color="brand" />
+              </Center>
+            ) : !creditNotes || creditNotes.length === 0 ? (
+              <Center py={60}>
+                <Stack align="center" gap="xs">
+                  <ThemeIcon size={48} radius="xl" color="red" variant="light">
+                    <IconReceiptRefund size={24} />
+                  </ThemeIcon>
+                  <Text fw={700}>No Credit Notes Found</Text>
+                  <Text size="sm" c="dimmed">
+                    There are no sales returns or credit notes recorded for this store location.
+                  </Text>
+                </Stack>
+              </Center>
+            ) : (
+              <Table striped highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Credit Note #</Table.Th>
+                    <Table.Th>Date &amp; Time</Table.Th>
+                    <Table.Th>Original Bill</Table.Th>
+                    <Table.Th>Customer</Table.Th>
+                    <Table.Th>Return Reason</Table.Th>
+                    <Table.Th>Refund Mode</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>Refund Amount</Table.Th>
+                    <Table.Th style={{ textAlign: 'right' }}>Actions</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {creditNotes.map((cn) => (
+                    <Table.Tr key={cn.id}>
+                      <Table.Td>
+                        <Text
+                          fw={700}
+                          size="sm"
+                          c="red.7"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => handleOpenCreditNote(cn)}
+                        >
+                          {cn.credit_note_number}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="xs" fw={500}>
+                          {new Date(cn.created_at).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </Text>
+                        <Text size="10px" c="dimmed">
+                          {new Date(cn.created_at).toLocaleTimeString('en-IN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text
+                          size="xs"
+                          fw={600}
+                          c="var(--brand-primary)"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => handleOpenDetails(cn.invoice_id)}
+                        >
+                          #{cn.invoice_number || 'Invoice'}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="xs" fw={600}>
+                          {cn.customer_name || cn.customer?.name || 'Walk-in Customer'}
+                        </Text>
+                        {(cn.customer_phone || cn.customer?.mobile_number) && (
+                          <Text size="10px" c="dimmed">
+                            {cn.customer_phone || cn.customer?.mobile_number}
+                          </Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge size="xs" variant="outline" color="gray">
+                          {cn.reason}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          size="xs"
+                          variant="filled"
+                          color={
+                            cn.refund_method === 'STORE_CREDIT'
+                              ? 'teal'
+                              : cn.refund_method === 'CASH'
+                              ? 'green'
+                              : 'blue'
+                          }
+                        >
+                          {cn.refund_method.replace('_', ' ')}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>
+                        <Text fw={900} size="sm" c="red.7">
+                          ₹{Number(cn.total_refund_amount).toFixed(2)}
+                        </Text>
+                        <Text size="10px" c="dimmed">
+                          Tax Rev: ₹{Number(cn.total_gst).toFixed(2)}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td style={{ textAlign: 'right' }}>
+                        <Group gap={4} justify="flex-end">
+                          <Tooltip label="Print Credit Note Slip">
+                            <ActionIcon
+                              variant="subtle"
+                              color="red"
+                              size="sm"
+                              onClick={() => handleOpenCreditNote(cn)}
+                            >
+                              <IconPrinter size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="View Original Invoice">
+                            <ActionIcon
+                              variant="subtle"
+                              color="gray"
+                              size="sm"
+                              onClick={() => handleOpenDetails(cn.invoice_id)}
+                            >
+                              <IconEye size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            )}
+          </Paper>
+        )}
       </Stack>
 
       {/* Invoice Details Drawer */}
@@ -448,6 +651,16 @@ export function InvoiceList() {
           setReceiptTarget(null);
         }}
         invoice={receiptTarget}
+      />
+
+      {/* Thermal Credit Note Modal */}
+      <ThermalCreditNoteModal
+        opened={creditNoteModalOpen}
+        onClose={() => {
+          setCreditNoteModalOpen(false);
+          setSelectedCreditNote(null);
+        }}
+        creditNote={selectedCreditNote}
       />
     </Box>
   );

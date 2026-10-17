@@ -14,6 +14,8 @@ export interface InvoiceItem {
   barcode_snapshot?: string;
   hsn_code?: string;
   quantity: number;
+  returned_quantity?: number;
+  returnable_quantity?: number;
   unit_price: number | string;
   discount: number | string;
   tax_slab: number | string;
@@ -134,4 +136,106 @@ export interface InvoiceCheckoutPayload {
   payments?: CheckoutPaymentInput[];
   loyalty_points_to_redeem?: number;
   notes?: string;
+}
+
+export type ReturnReason =
+  | 'DEFECTIVE'
+  | 'WRONG_ITEM'
+  | 'EXPIRED'
+  | 'CUSTOMER_DISSATISFACTION'
+  | 'OTHER';
+
+export type RefundMethod = 'CASH' | 'UPI' | 'STORE_CREDIT' | 'ORIGINAL_PAYMENT';
+export type CreditNoteStatus = 'COMPLETED' | 'CANCELLED';
+
+export interface CreditNoteItem {
+  id: string;
+  created_at?: string;
+  credit_note_id: string;
+  invoice_item_id: string;
+  product_id: string;
+  product_name?: string;
+  product_sku?: string;
+  product_name_snapshot: string;
+  sku_snapshot: string;
+  hsn_code?: string;
+  quantity: number;
+  unit_price: number | string;
+  discount_reversed: number | string;
+  tax_slab: number | string;
+  taxable_amount: number | string;
+  cgst_amount: number | string;
+  sgst_amount: number | string;
+  igst_amount: number | string;
+  gst_amount: number | string;
+  refund_amount: number | string;
+  restock_inventory: boolean;
+  reason: ReturnReason;
+}
+
+export interface CreditNote {
+  id: string;
+  created_at: string;
+  updated_at?: string;
+  store_id: string;
+  store?: {
+    id: string;
+    name: string;
+    gst_number?: string;
+    address?: string;
+    phone?: string;
+  };
+  invoice_id: string;
+  invoice_number?: string;
+  customer_id?: string | null;
+  customer?: {
+    id: string;
+    name?: string;
+    mobile_number: string;
+    email?: string;
+    gstin?: string;
+    store_mappings?: Array<{
+      store_id: string;
+      store_credit_balance?: number | string;
+      loyalty_points?: number;
+    }>;
+  } | null;
+  customer_name?: string;
+  customer_phone?: string;
+  register_session_id?: string | null;
+  credit_note_number: string;
+  status: CreditNoteStatus;
+  refund_method: RefundMethod;
+  reason: ReturnReason;
+  subtotal: number | string;
+  total_discount_reversed: number | string;
+  cgst_amount: number | string;
+  sgst_amount: number | string;
+  igst_amount: number | string;
+  total_gst: number | string;
+  total_refund_amount: number | string;
+  loyalty_points_deducted: number;
+  notes?: string;
+  items: CreditNoteItem[];
+}
+
+export interface ReturnItemInput {
+  invoice_item_id: string;
+  quantity: number;
+  reason?: ReturnReason;
+  restock_inventory?: boolean;
+}
+
+export interface ProcessReturnPayload {
+  items: ReturnItemInput[];
+  refund_method?: RefundMethod;
+  reason?: string;
+  notes?: string;
+}
+
+export interface CreditNoteFilterParams {
+  store_id?: string;
+  invoice_id?: string;
+  customer_id?: string;
+  search?: string;
 }

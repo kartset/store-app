@@ -113,8 +113,12 @@ class CreditNoteItemSerializer(BaseModelSerializer):
 
 
 class CreditNoteSerializer(BaseModelSerializer):
+    store = StoreSerializer(source='store_id', read_only=True)
+    customer = CustomerSerializer(source='customer_id', read_only=True)
     items = CreditNoteItemSerializer(many=True, read_only=True)
     invoice_number = serializers.CharField(source='invoice_id.invoice_number', read_only=True)
+    customer_name = serializers.CharField(source='invoice_id.customer_name_snapshot', read_only=True)
+    customer_phone = serializers.CharField(source='invoice_id.customer_phone_snapshot', read_only=True)
 
     class Meta:
         model = CreditNote
@@ -123,9 +127,13 @@ class CreditNoteSerializer(BaseModelSerializer):
             'created_at',
             'updated_at',
             'store_id',
+            'store',
             'invoice_id',
             'invoice_number',
             'customer_id',
+            'customer',
+            'customer_name',
+            'customer_phone',
             'register_session_id',
             'credit_note_number',
             'status',
