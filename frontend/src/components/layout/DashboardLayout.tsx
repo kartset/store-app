@@ -29,6 +29,7 @@ import {
   IconCoins,
   IconShoppingCart,
   IconChartBar,
+  IconDatabaseImport,
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
@@ -462,6 +463,28 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/analytics')}
               active={location.pathname === '/analytics'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Data Exchange"
+              description="Bulk import, dry-runs & exports"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/data-exchange' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/data-exchange' ? 'filled' : 'light'}
+                >
+                  <IconDatabaseImport size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/data-exchange')}
+              active={location.pathname === '/data-exchange'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
