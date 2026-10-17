@@ -22,9 +22,11 @@ import {
   IconReceipt,
   IconArrowRight,
   IconInfoCircle,
+  IconSparkles,
 } from '@tabler/icons-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useCheckoutInvoice } from '../../invoice/api';
+import { DynamicUPIQRModal, useCreatePaymentOrder, type CreateOrderResponse } from '../../payments';
 import type { CartItem, CartTaxBreakdown } from '../types';
 import type { Customer } from '../../customers/types';
 import type { Invoice, PaymentMethod } from '../../invoice/types';
@@ -55,6 +57,7 @@ export function POSCheckoutModal({
   onCheckoutSuccess,
 }: POSCheckoutModalProps) {
   const checkoutMutation = useCheckoutInvoice();
+  const createOrderMutation = useCreatePaymentOrder();
 
   // Active payment tab
   const [activeTab, setActiveTab] = useState<string>('cash');
@@ -68,6 +71,12 @@ export function POSCheckoutModal({
   const [cardRef, setCardRef] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
+  // Dynamic UPI Order & Modal State
+  const [dynamicOrderData, setDynamicOrderData] = useState<CreateOrderResponse | null>(null);
+  const [dynamicQRModalOpened, setDynamicQRModalOpened] = useState(false);
+  const [isGeneratingQR, setIsGeneratingQR] = useState(false);
+  const createdInvoiceRef = useRef<Invoice | null>(null);
+
   // Reset or initialize tenders whenever modal opens or total changes
   useEffect(() => {
     if (opened) {
@@ -79,6 +88,10 @@ export function POSCheckoutModal({
       setCardRef('');
       setNotes('');
       setActiveTab('cash');
+      setDynamicOrderData(null);
+      setDynamicQRModalOpened(false);
+      setIsGeneratingQR(false);
+      createdInvoiceRef.current = null;
     }
   }, [opened, totals.grandTotal]);
 
@@ -194,8 +207,78 @@ export function POSCheckoutModal({
     }
   };
 
+  const handleLaunchDynamicQR = async () => {
+    setIsGeneratingQR(true);
+    try {
+      let inv = createdInvoiceRef.current;
+      if (!inv) {
+        // Create draft invoice with whatever partial non-UPI tenders are set
+        const paymentsPayload: {
+          method: PaymentMethod;
+          amount: number;
+          amount_tendered?: number;
+          change_returned?: number;
+          external_transaction_id?: string;
+        }[] = [];
+
+        if (cashAmount > 0 && cashAmount < totals.grandTotal) {
+          paymentsPayload.push({
+            method: 'CASH',
+            amount: cashAmount,
+            amount_tendered: cashTendered,
+            change_returned: changeDue,
+          });
+        }
+        if (cardAmount > 0 && cardAmount < totals.grandTotal) {
+          paymentsPayload.push({
+            method: 'CARD',
+            amount: cardAmount,
+            external_transaction_id: cardRef.trim() || undefined,
+          });
+        }
+
+        inv = await checkoutMutation.mutateAsync({
+          store_id: storeId,
+          customer_id: customer?.id,
+          customer_name: customer?.name || 'Walk-in Customer',
+          customer_phone: customer?.mobile_number || '9999999999',
+          customer_gstin: customer?.gstin || undefined,
+          type: 'POS',
+          is_tax_inclusive: true,
+          items: items.map((it) => ({
+            product_id: it.product_id,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            discount: it.discount,
+          })),
+          payments: paymentsPayload,
+          loyalty_points_to_redeem: loyaltyPointsRedeemed > 0 ? loyaltyPointsRedeemed : undefined,
+          notes: notes.trim() || undefined,
+        });
+
+        createdInvoiceRef.current = inv;
+      }
+
+      const upiTargetAmount = upiAmount > 0 ? upiAmount : totals.grandTotal;
+      const order = await createOrderMutation.mutateAsync({
+        invoice_id: inv.id,
+        amount: upiTargetAmount,
+        method: 'UPI',
+      });
+
+      setDynamicOrderData(order);
+      setDynamicQRModalOpened(true);
+    } catch (err) {
+      console.error('Failed to initialize dynamic UPI QR order:', err);
+      playBeep('error');
+    } finally {
+      setIsGeneratingQR(false);
+    }
+  };
+
   return (
-    <Modal
+    <>
+      <Modal
       opened={opened}
       onClose={onClose}
       title={
@@ -391,7 +474,7 @@ export function POSCheckoutModal({
                     </Center>
                   </Paper>
 
-                  <Stack gap="xs" style={{ maxWidth: 300 }}>
+                  <Stack gap="xs" style={{ maxWidth: 320 }}>
                     <Badge color="green" variant="light" size="sm">
                       Real-time Dynamic UPI
                     </Badge>
@@ -401,6 +484,19 @@ export function POSCheckoutModal({
                     <Text size="xs" c="dimmed">
                       Ask the customer to scan using Google Pay, PhonePe, Paytm, or any BHIM UPI app.
                     </Text>
+
+                    <Button
+                      size="xs"
+                      color="teal"
+                      variant="filled"
+                      leftSection={<IconSparkles size={14} />}
+                      loading={isGeneratingQR}
+                      onClick={handleLaunchDynamicQR}
+                      fullWidth
+                    >
+                      ⚡ Open Counter Dynamic QR (Live Polling)
+                    </Button>
+
                     {balanceRemaining > 0 && upiAmount === 0 && (
                       <Button
                         size="xs"
@@ -535,5 +631,27 @@ export function POSCheckoutModal({
         </Group>
       </Stack>
     </Modal>
+
+    <DynamicUPIQRModal
+      opened={dynamicQRModalOpened}
+      onClose={() => setDynamicQRModalOpened(false)}
+      orderData={dynamicOrderData}
+      onPaymentSuccess={(_paymentId, _utr) => {
+        setDynamicQRModalOpened(false);
+        playBeep('success');
+        const inv = createdInvoiceRef.current;
+        if (inv) {
+          onCheckoutSuccess(
+            {
+              ...inv,
+              status: 'PAID',
+            },
+            changeDue
+          );
+          onClose();
+        }
+      }}
+    />
+  </>
   );
 }
