@@ -22,3 +22,6 @@ bicep_*.txt
 
 cdp-sdlc.code-workspace
 .DS_Store
+.gemini/
+__pycache__/
+*.pyc
