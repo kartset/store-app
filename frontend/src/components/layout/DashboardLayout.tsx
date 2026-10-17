@@ -26,6 +26,7 @@ import {
   IconUsers,
   IconReceipt,
   IconCashRegister,
+  IconCoins,
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
@@ -393,6 +394,28 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/invoices')}
               active={location.pathname === '/invoices'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Cash Register"
+              description="Shifts & Z-Reports"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/register' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/register' ? 'filled' : 'light'}
+                >
+                  <IconCoins size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/register')}
+              active={location.pathname === '/register'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
