@@ -34,6 +34,12 @@ class StoreCustomer(BaseModel):
         default=Decimal('0.00'),
         help_text="Current outstanding unpaid credit balance."
     )
+    store_credit_balance = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Prepaid store credit / wallet balance from refunds or advance deposits."
+    )
     first_visit = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp of customer's first interaction or purchase at this store."

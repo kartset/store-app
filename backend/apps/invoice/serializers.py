@@ -5,11 +5,15 @@ from rest_framework import serializers
 from apps.customer.serializers import CustomerSerializer
 from apps.store.serializers import StoreSerializer
 from db.models import (
+    CreditNote,
+    CreditNoteItem,
     Invoice,
     InvoiceItem,
     InvoiceType,
     Payment,
     PaymentMethod,
+    RefundMethod,
+    ReturnReason,
 )
 from utils.serializers import BaseModelSerializer
 
@@ -17,6 +21,8 @@ from utils.serializers import BaseModelSerializer
 class InvoiceItemSerializer(BaseModelSerializer):
     product_name = serializers.CharField(source='product_id.name', read_only=True)
     product_sku = serializers.CharField(source='product_id.sku', read_only=True)
+    returned_quantity = serializers.IntegerField(read_only=True)
+    returnable_quantity = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = InvoiceItem
@@ -38,6 +44,8 @@ class InvoiceItemSerializer(BaseModelSerializer):
             'barcode_snapshot',
             'hsn_code',
             'quantity',
+            'returned_quantity',
+            'returnable_quantity',
             'unit_price',
             'discount',
             'tax_slab',
@@ -72,11 +80,76 @@ class PaymentSerializer(BaseModelSerializer):
         ]
 
 
+class CreditNoteItemSerializer(BaseModelSerializer):
+    product_name = serializers.CharField(source='product_id.name', read_only=True)
+    product_sku = serializers.CharField(source='product_id.sku', read_only=True)
+
+    class Meta:
+        model = CreditNoteItem
+        fields = [
+            'id',
+            'created_at',
+            'credit_note_id',
+            'invoice_item_id',
+            'product_id',
+            'product_name',
+            'product_sku',
+            'product_name_snapshot',
+            'sku_snapshot',
+            'hsn_code',
+            'quantity',
+            'unit_price',
+            'discount_reversed',
+            'tax_slab',
+            'taxable_amount',
+            'cgst_amount',
+            'sgst_amount',
+            'igst_amount',
+            'gst_amount',
+            'refund_amount',
+            'restock_inventory',
+            'reason',
+        ]
+
+
+class CreditNoteSerializer(BaseModelSerializer):
+    items = CreditNoteItemSerializer(many=True, read_only=True)
+    invoice_number = serializers.CharField(source='invoice_id.invoice_number', read_only=True)
+
+    class Meta:
+        model = CreditNote
+        fields = [
+            'id',
+            'created_at',
+            'updated_at',
+            'store_id',
+            'invoice_id',
+            'invoice_number',
+            'customer_id',
+            'register_session_id',
+            'credit_note_number',
+            'status',
+            'refund_method',
+            'reason',
+            'subtotal',
+            'total_discount_reversed',
+            'cgst_amount',
+            'sgst_amount',
+            'igst_amount',
+            'total_gst',
+            'total_refund_amount',
+            'loyalty_points_deducted',
+            'notes',
+            'items',
+        ]
+
+
 class InvoiceSerializer(BaseModelSerializer):
     store = StoreSerializer(source='store_id', read_only=True)
     customer = CustomerSerializer(source='customer_id', read_only=True)
     items = InvoiceItemSerializer(many=True, read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
+    credit_notes = CreditNoteSerializer(many=True, read_only=True)
 
     class Meta:
         model = Invoice
@@ -114,6 +187,7 @@ class InvoiceSerializer(BaseModelSerializer):
             'customer',
             'items',
             'payments',
+            'credit_notes',
         ]
 
 
@@ -148,4 +222,23 @@ class InvoiceCheckoutSerializer(serializers.Serializer):
     def validate_items(self, value):
         if not value:
             raise serializers.ValidationError("At least one item is required to checkout an invoice.")
+        return value
+
+
+class ReturnItemInputSerializer(serializers.Serializer):
+    invoice_item_id = serializers.UUIDField()
+    quantity = serializers.IntegerField(min_value=1)
+    restock_inventory = serializers.BooleanField(default=True)
+    reason = serializers.ChoiceField(choices=ReturnReason.choices, default=ReturnReason.CUSTOMER_DISSATISFACTION)
+
+
+class SalesReturnRequestSerializer(serializers.Serializer):
+    items = ReturnItemInputSerializer(many=True)
+    refund_method = serializers.ChoiceField(choices=RefundMethod.choices, default=RefundMethod.CASH)
+    reason = serializers.ChoiceField(choices=ReturnReason.choices, default=ReturnReason.CUSTOMER_DISSATISFACTION)
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError("At least one item is required to process a return.")
         return value

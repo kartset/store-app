@@ -193,6 +193,16 @@ class InvoiceItem(BaseModel):
     def __str__(self):
         return f"{self.product_name_snapshot or self.product_id.name} x {self.quantity}"
 
+    @property
+    def returned_quantity(self) -> int:
+        return sum(
+            self.return_items.filter(credit_note_id__status='COMPLETED', is_deleted=False).values_list('quantity', flat=True)
+        )
+
+    @property
+    def returnable_quantity(self) -> int:
+        return max(0, self.quantity - self.returned_quantity)
+
 
 class Payment(BaseModel):
     invoice_id = models.ForeignKey(
