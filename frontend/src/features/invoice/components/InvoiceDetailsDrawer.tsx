@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   Badge,
@@ -24,13 +24,17 @@ import {
   IconFileInvoice,
   IconPrinter,
   IconReceipt,
+  IconReceiptRefund,
   IconRotate2,
   IconUser,
   IconQrcode,
 } from '@tabler/icons-react';
-import { useCancelInvoice, useInvoice } from '../api';
+import { useCancelInvoice, useCreditNotes, useInvoice } from '../api';
 import { DynamicUPIQRModal, useCreatePaymentOrder, type CreateOrderResponse } from '../../payments';
 import { ThermalReceiptModal } from './ThermalReceiptModal';
+import { ReturnItemsModal } from './ReturnItemsModal';
+import { ThermalCreditNoteModal } from './ThermalCreditNoteModal';
+import type { CreditNote } from '../types';
 
 interface InvoiceDetailsDrawerProps {
   invoiceId: string | null;
@@ -40,14 +44,29 @@ interface InvoiceDetailsDrawerProps {
 
 export function InvoiceDetailsDrawer({ invoiceId, opened, onClose }: InvoiceDetailsDrawerProps) {
   const { data: invoice, isLoading, refetch } = useInvoice(invoiceId || undefined);
+  const { data: invoiceCreditNotes, refetch: refetchCreditNotes } = useCreditNotes(
+    invoice?.id ? { invoice_id: invoice.id } : undefined
+  );
   const cancelMutation = useCancelInvoice();
   const createOrderMutation = useCreatePaymentOrder();
 
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [creditNoteModalOpen, setCreditNoteModalOpen] = useState(false);
+  const [activeCreditNote, setActiveCreditNote] = useState<CreditNote | null>(null);
   const [dynamicOrderData, setDynamicOrderData] = useState<CreateOrderResponse | null>(null);
   const [dynamicQRModalOpen, setDynamicQRModalOpen] = useState(false);
   const [isCreatingQR, setIsCreatingQR] = useState(false);
+
+  const canReturnItems = useMemo(() => {
+    if (!invoice || invoice.status === 'CANCELLED') return false;
+    return invoice.items?.some((item) => {
+      const alreadyReturned = item.returned_quantity ?? 0;
+      const returnable = item.returnable_quantity ?? Math.max(0, item.quantity - alreadyReturned);
+      return returnable > 0;
+    });
+  }, [invoice]);
 
   const handleCollectUPI = async () => {
     if (!invoice) return;
@@ -142,6 +161,18 @@ export function InvoiceDetailsDrawer({ invoiceId, opened, onClose }: InvoiceDeta
                 </Group>
 
                 <Group gap="xs">
+                  {canReturnItems && (
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="red"
+                      leftSection={<IconReceiptRefund size={14} />}
+                      onClick={() => setReturnModalOpen(true)}
+                    >
+                      Return Items
+                    </Button>
+                  )}
+
                   <Button
                     size="xs"
                     variant="light"
@@ -248,6 +279,11 @@ export function InvoiceDetailsDrawer({ invoiceId, opened, onClose }: InvoiceDeta
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'center', fontWeight: 600, fontSize: '13px' }}>
                         {item.quantity}
+                        {Boolean(item.returned_quantity && item.returned_quantity > 0) && (
+                          <Badge color="orange" size="xs" variant="light" display="block" mx="auto" mt={2}>
+                            {item.returned_quantity} Ret
+                          </Badge>
+                        )}
                       </Table.Td>
                       <Table.Td style={{ textAlign: 'right', fontSize: '13px' }}>
                         ₹{Number(item.unit_price).toFixed(2)}
@@ -430,6 +466,90 @@ export function InvoiceDetailsDrawer({ invoiceId, opened, onClose }: InvoiceDeta
                   </Stack>
                 </Paper>
             </SimpleGrid>
+
+            {/* Issued Credit Notes / Returns Section */}
+            {invoiceCreditNotes && invoiceCreditNotes.length > 0 && (
+              <Paper withBorder radius="md" p="md">
+                <Group justify="space-between" mb="xs">
+                  <Group gap="xs">
+                    <ThemeIcon color="red" size="sm" variant="light">
+                      <IconReceiptRefund size={14} />
+                    </ThemeIcon>
+                    <Text fw={700} size="sm">
+                      Issued Credit Notes ({invoiceCreditNotes.length})
+                    </Text>
+                  </Group>
+                  <Badge color="red" variant="light">
+                    Total Refunded: ₹
+                    {invoiceCreditNotes
+                      .reduce((acc, cn) => acc + Number(cn.total_refund_amount), 0)
+                      .toFixed(2)}
+                  </Badge>
+                </Group>
+
+                <Table withTableBorder striped verticalSpacing="xs">
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Credit Note #</Table.Th>
+                      <Table.Th>Date</Table.Th>
+                      <Table.Th>Refund Mode</Table.Th>
+                      <Table.Th style={{ textAlign: 'right' }}>Amount</Table.Th>
+                      <Table.Th style={{ textAlign: 'center' }}>Slip</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {invoiceCreditNotes.map((cn) => (
+                      <Table.Tr key={cn.id}>
+                        <Table.Td>
+                          <Text size="xs" fw={700}>
+                            {cn.credit_note_number}
+                          </Text>
+                          <Text size="10px" c="dimmed">
+                            {cn.reason}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td style={{ fontSize: '12px' }}>
+                          {new Date(cn.created_at).toLocaleDateString('en-IN')}
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge
+                            size="xs"
+                            color={cn.refund_method === 'STORE_CREDIT' ? 'teal' : 'blue'}
+                            variant="light"
+                          >
+                            {cn.refund_method.replace('_', ' ')}
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td
+                          style={{
+                            textAlign: 'right',
+                            fontWeight: 700,
+                            fontSize: '13px',
+                            color: '#fa5252',
+                          }}
+                        >
+                          ₹{Number(cn.total_refund_amount).toFixed(2)}
+                        </Table.Td>
+                        <Table.Td style={{ textAlign: 'center' }}>
+                          <Button
+                            size="compact-xs"
+                            variant="light"
+                            color="brand"
+                            leftSection={<IconPrinter size={12} />}
+                            onClick={() => {
+                              setActiveCreditNote(cn);
+                              setCreditNoteModalOpen(true);
+                            }}
+                          >
+                            Slip
+                          </Button>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Paper>
+            )}
           </Stack>
         )}
       </Drawer>
@@ -479,6 +599,26 @@ export function InvoiceDetailsDrawer({ invoiceId, opened, onClose }: InvoiceDeta
         opened={receiptOpen}
         onClose={() => setReceiptOpen(false)}
         invoice={invoice || null}
+      />
+
+      {/* Sales Return & Credit Note Modal */}
+      <ReturnItemsModal
+        opened={returnModalOpen}
+        onClose={() => setReturnModalOpen(false)}
+        invoice={invoice || null}
+        onSuccess={(creditNote) => {
+          refetch();
+          refetchCreditNotes();
+          setActiveCreditNote(creditNote);
+          setCreditNoteModalOpen(true);
+        }}
+      />
+
+      {/* Printable Thermal Credit Note Slip Modal */}
+      <ThermalCreditNoteModal
+        opened={creditNoteModalOpen}
+        onClose={() => setCreditNoteModalOpen(false)}
+        creditNote={activeCreditNote}
       />
 
       {/* Dynamic UPI QR Modal */}

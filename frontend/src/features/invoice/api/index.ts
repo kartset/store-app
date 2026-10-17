@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
 import type {
+  CreditNote,
+  CreditNoteFilterParams,
   DailySummaryMetrics,
   Invoice,
   InvoiceCheckoutPayload,
   InvoiceFilterParams,
+  ProcessReturnPayload,
 } from '../types';
 
 export function useInvoices(params?: InvoiceFilterParams) {
@@ -92,3 +95,58 @@ export function useCancelInvoice() {
     },
   });
 }
+
+export function useCreditNotes(params?: CreditNoteFilterParams) {
+  return useQuery({
+    queryKey: ['credit-notes', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = {};
+      if (params?.store_id) queryParams.store_id = params.store_id;
+      if (params?.invoice_id) queryParams.invoice_id = params.invoice_id;
+      if (params?.customer_id) queryParams.customer_id = params.customer_id;
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<CreditNote[] | { results: CreditNote[] }>('/api/credit-notes/', {
+        params: queryParams,
+      });
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return response.data.results || [];
+    },
+  });
+}
+
+export function useCreditNote(id?: string) {
+  return useQuery({
+    queryKey: ['credit-note', id],
+    queryFn: async () => {
+      if (!id) return null;
+      const response = await api.get<CreditNote>(`/api/credit-notes/${id}/`);
+      return response.data;
+    },
+    enabled: Boolean(id),
+  });
+}
+
+export function useProcessReturn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ invoiceId, payload }: { invoiceId: string; payload: ProcessReturnPayload }) => {
+      const response = await api.post<CreditNote>(`/api/invoices/${invoiceId}/return/`, payload);
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice', variables.invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
+      queryClient.invalidateQueries({ queryKey: ['invoice-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-registers'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-lookup'] });
+    },
+  });
+}
+

@@ -19,6 +19,7 @@ class CustomerStoreMappingSummarySerializer(serializers.ModelSerializer):
             'store_id',
             'store_name',
             'loyalty_points',
+            'store_credit_balance',
             'credit_limit',
             'outstanding_balance',
             'total_visits',
