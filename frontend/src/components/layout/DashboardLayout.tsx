@@ -31,6 +31,7 @@ import {
   IconShoppingCart,
   IconChartBar,
   IconDatabaseImport,
+  IconReceiptTax,
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
@@ -353,6 +354,28 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/deliveries')}
               active={location.pathname === '/deliveries'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="GST Filing & Returns"
+              description="GSTR-1, 3B & HSN returns"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/gst' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/gst' ? 'filled' : 'light'}
+                >
+                  <IconReceiptTax size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/gst')}
+              active={location.pathname === '/gst'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,

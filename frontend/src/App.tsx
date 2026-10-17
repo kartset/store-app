@@ -15,6 +15,7 @@ import { OrderList } from './features/orders';
 import { AnalyticsDashboard } from './features/analytics';
 import { DataExchangeHub } from './features/data-exchange';
 import { DeliveryList } from './features/delivery';
+import { GSTDashboard } from './features/gst';
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
         <Route path="register" element={<RegisterDashboard />} />
         <Route path="orders" element={<OrderList />} />
         <Route path="deliveries" element={<DeliveryList />} />
+        <Route path="gst" element={<GSTDashboard />} />
         <Route path="analytics" element={<AnalyticsDashboard />} />
         <Route path="data-exchange" element={<DataExchangeHub />} />
       </Route>
