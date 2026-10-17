@@ -37,6 +37,7 @@ urlpatterns = [
     path("api/data-exchange/", include("apps.data_exchange.urls")),
     path("api/deliveries/", include("apps.delivery.urls")),
     path("api/gst/", include("apps.gst.urls")),
+    path("api/mcp/", include("apps.mcp.urls")),
 ]
 
 
