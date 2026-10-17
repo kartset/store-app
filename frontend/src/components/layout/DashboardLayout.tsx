@@ -28,6 +28,7 @@ import {
   IconCashRegister,
   IconCoins,
   IconShoppingCart,
+  IconChartBar,
 } from '@tabler/icons-react';
 
 import { useMemo } from 'react';
@@ -439,6 +440,28 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/register')}
               active={location.pathname === '/register'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Analytics & BI"
+              description="Real-time sales, trends & velocity"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/analytics' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/analytics' ? 'filled' : 'light'}
+                >
+                  <IconChartBar size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/analytics')}
+              active={location.pathname === '/analytics'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
