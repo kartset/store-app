@@ -98,3 +98,19 @@ This document outlines the core structural and architectural decisions made for 
   - **POS Fast Lookup Endpoint (`GET /api/customers/lookup/?mobile=...`):** Strips punctuation, country codes (`+91`), and leading zeros, performing a pre-fetched single-query lookup returning customer intelligence and branch loyalty in < 50ms.
 - **Reason:** Shoppers frequently patronize multiple branches of the same retail chain. Centralizing the primary identity on the mobile number prevents duplicate customer records, while maintaining store-scoped loyalty balances and khata limits safeguards individual store cash drawers and franchise boundaries.
 
+---
+
+## 14. Statutory GST Return Engine & HSN Aggregation
+- **Decision:** Statutory tax reporting logic is encapsulated within `apps/gst/services.py` (`GSTComputationService`) rather than being computed ad-hoc in views. The engine aggregates invoices by tax rates, state codes, and B2B/B2CL/B2CS statutory classifications, computes CGST/SGST/IGST breakdowns, generates HSN/SAC summaries, and formats official government GSTN offline tool-compatible JSON exports.
+- **Reason:** Tax laws require deterministic precision, immutable historical period locks, and exact compliance with government schemas. Isolating tax computations into a dedicated service layer guarantees that return generation, ledger audits, and statutory exports always produce identical numbers.
+
+---
+
+## 15. Native Model Context Protocol (MCP) Server & Dual AI Proxy Engine
+- **Decision:** The retail platform integrates a native Model Context Protocol (MCP) server directly inside `backend/apps/mcp/`, providing a JSON-RPC 2.0 endpoint (`POST /api/mcp/rpc/`), REST tool discovery (`GET /api/mcp/tools/`), and conversational AI routing (`POST /api/mcp/chat/`):
+  - **Decorator-Driven Tool Registry (`MCPToolRegistry`):** Retail tools (`search_products`, `check_inventory`, `get_daily_sales_summary`, `lookup_customer`, `get_gst_filing_summary`, `list_stores`, `lookup_order`) are registered with explicit JSON schema definitions alongside their Python handler functions.
+  - **Online Multi-Turn Proxy:** Connects to OpenRouter or OpenAI, converts registered MCP tools into OpenAI function calling declarations, autonomously executes tools against Django models, and loops responses back to the LLM for natural language synthesis.
+  - **Zero-Key Offline Fallback Router:** When external API keys are not supplied, the server parses retail intent keywords and directly queries the Django ORM, returning structured Markdown tables and metrics without relying on cloud LLMs.
+- **Reason:** Standardizes AI interactions according to open industry specifications (MCP), prevents sensitive API keys from leaking into version control, guarantees tool schema accuracy, and ensures store managers can query real-time store metrics even during internet disruptions or in air-gapped retail environments.
+
+

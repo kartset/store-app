@@ -1,93 +1,97 @@
-# Store App — Model Context Protocol (MCP) Server
+# Store App — Model Context Protocol (MCP) Server & Retail Copilot
 
 ## Overview
-This directory houses the **Model Context Protocol (MCP)** server for **Store App**. It serves as the standard AI-native protocol interface exposing the retail platform's inventory, catalog, POS analytics, supplier procurement, and customer operations to large language models (LLMs) and autonomous AI coding/agentic assistants (such as Antigravity, Claude Desktop, and in-house retail copilots).
+This module houses the **Model Context Protocol (MCP)** server and **Retail Copilot Assistant Engine** for **Store App**. It serves as the standard AI-native protocol interface exposing the retail platform's inventory, master catalog, POS revenue analytics, customer loyalty, GST compliance, and orders to Large Language Models (LLMs) and autonomous AI coding/agentic assistants (such as Antigravity, Claude Desktop, and in-house retail copilots).
 
 ---
 
-## 🎯 Core Objectives
-1. **Tool Provider**: Expose granular, safe, and parameterized retail functions (e.g. checking stock, generating barcode lookups, drafting stock transfer orders) as standardized MCP tools.
-2. **Context & Resource Provider**: Serve live structured retail resources (e.g. daily sales summaries, store inventory snapshots, low-stock alerts) directly into LLM prompts.
-3. **Workflow Automation & Prompts**: Provide predefined AI-driven workflows for store managers, such as automated reorder calculations, vendor price audits, and discrepancy triage.
-
----
-
-## 🏛️ Architecture & Protocol Flow
+## 🎯 Implemented Architecture & Protocol Flow
 
 ```text
-┌──────────────────────────┐          MCP Protocol (JSON-RPC)          ┌──────────────────────────┐
-│  AI Agent / LLM Client   │ ◄───────────────────────────────────────► │   Store App MCP Server   │
-│ (Antigravity / Desktop)  │                                           │       (FastMCP)          │
-└──────────────────────────┘                                           └────────────┬─────────────┘
-                                                                                    │
-                                                                   Authenticated Internal API Calls
-                                                                                    │
-                                                                                    ▼
-                                                                       ┌──────────────────────────┐
-                                                                       │  Store App Django Core   │
-                                                                       │ (Database & REST Engine) │
-                                                                       └──────────────────────────┘
+┌─────────────────────────────────┐
+│     AI Copilot / MCP Client     │
+│  (React Drawer / External IDE)  │
+└────────────────┬────────────────┘
+                 │
+                 │ JSON-RPC 2.0 or REST Chat
+                 ▼
+┌─────────────────────────────────┐
+│     Store App MCP Server        │
+│    (backend/apps/mcp/)          │
+├─────────────────────────────────┤
+│ • MCPJsonRpcView (/api/mcp/rpc/)│
+│ • AICopilotEngine (/mcp/chat/)  │
+│ • Tool Registry (7 live tools)  │
+│ • Zero-Key Offline Router       │
+└────────────────┬────────────────┘
+                 │
+                 │ Direct High-Speed Querying
+                 ▼
+┌─────────────────────────────────┐
+│      PostgreSQL Database        │
+│   (Centralized `db` Models)     │
+└─────────────────────────────────┘
 ```
 
 ---
 
-## 🛠️ Planned Tool Taxonomy
+## 🛠️ Implemented MCP Retail Tools
 
-### 1. Inventory & Stock Movement Tools
-- `get_store_inventory(store_id, sku_or_barcode=None, low_stock_only=False)`: Retrieve live store stock levels, reorder thresholds, and location quantities.
-- `audit_stock_movement(store_id, product_id, limit=20)`: Inspect historical goods receipts, sales reductions, and manual adjustments.
-- `create_stock_adjustment(store_id, product_id, quantity_delta, reason, notes)`: Record audited operational stock increments or write-offs.
+All tools are registered in `backend/apps/mcp/tools.py` via `MCPToolRegistry` and exposed via both JSON-RPC 2.0 (`POST /api/mcp/rpc/`) and REST (`GET /api/mcp/tools/`):
 
-### 2. Product Catalog & Sourcing Tools
-- `search_master_catalog(query, barcode=None)`: Fast dual-barcode and text lookup across the organization's product register.
-- `get_vendor_pricing_matrix(product_id)`: Compare supplier agreed unit costs, minimum order quantities (MOQ), and delivery lead times.
-- `verify_global_catalogue_item(barcode)`: Query the global GS1/Indian FMCG register to auto-fill brand, category, HSN code, and GST rates.
-
-### 3. POS & Cashier Analytics Tools
-- `get_daily_sales_summary(store_id, date=None)`: Retrieve total counter revenue, invoice counts, payment method breakdowns (Cash, UPI, Card), and average basket sizes.
-- `list_top_selling_products(store_id, date_range="last_7_days", limit=10)`: Identify high-velocity products and run-rates.
-
-### 4. Customer & Loyalty Tools
-- `lookup_customer_by_phone(phone_number)`: Fast customer identification returning store visit counts, lifetime revenue, and redeemable loyalty points.
-- `get_customer_purchase_history(customer_id, limit=10)`: Retrieve past invoice receipts and product breakdown.
-
-### 5. Warehouse & Replenishment Tools (Future Work)
-- `calculate_reorder_quantities(store_id)`: Compute recommended replenishment quantities based on current stock, sales run-rate, and supplier lead time.
-- `draft_stock_transfer_order(source_warehouse_id, destination_store_id, line_items)`: Create a draft replenishment request for manager sign-off.
+1. **`search_products(query, category=None, limit=10)`**:
+   - Searches master catalog by name, universal EAN-13 barcode, internal sticker barcode, or SKU.
+   - Returns store pricing, MRP, and stock availability.
+2. **`check_inventory(store_id=None, low_stock_only=False, product_query=None, limit=20)`**:
+   - Live store inventory levels, low-stock reorder thresholds, batch numbers, and stock valuation.
+3. **`get_daily_sales_summary(date_str=None, store_id=None)`**:
+   - Real-time gross turnover, net subtotal, discount, AOV, CGST/SGST/IGST breakdown, and tender payment breakdown (Cash, Card, UPI, Store Credit).
+4. **`lookup_customer(phone)`**:
+   - Customer 360 profile, multi-store loyalty reward points balance, visit counts, and recent invoices.
+5. **`get_gst_filing_summary(period=None, store_id=None)`**:
+   - Monthly and quarterly GSTR-1 outward taxable supplies and GSTR-3B tax liability summaries.
+6. **`list_stores(active_only=True)`**:
+   - Active physical store directory, store codes, phone numbers, and cities.
+7. **`lookup_order(order_number=None, phone=None)`**:
+   - Omnichannel customer orders, fulfillment status, and line items.
 
 ---
 
-## 🔒 Security & Multi-Tenant Governance
-- **Tenant Scoping**: All MCP requests must authenticate via an organization-scoped API key (`X-StoreApp-API-Key`). Agents cannot query data across tenant boundaries.
-- **Role-Based Tool Permissions (RBAC)**: Tools are partitioned into permission tiers (e.g., `inventory:read`, `inventory:write`, `finance:read`).
-- **Destructive Operation Gates**: Any mutation action (such as manual stock write-offs or order cancellations) requires explicit Human-in-the-Loop (HITL) approval before execution.
+## 🤖 Dual AI Proxy & Copilot Engine (`AICopilotEngine`)
+
+Located in `backend/apps/mcp/services.py`:
+- **Online Autonomous Multi-Turn Mode**:
+  - Connects to **OpenRouter API** (`https://openrouter.ai/api/v1/chat/completions`) or direct **OpenAI API** (`https://api.openai.com/v1/chat/completions`).
+  - Converts registered MCP tools into OpenAI function calling schemas.
+  - Autonomously executes tool calls against Django models and feeds structured outputs back to the model for conversational synthesis.
+- **Offline Zero-Key Intent Router**:
+  - Automatically activates when external API keys are omitted.
+  - Evaluates retail user intent (sales, inventory, low stock, GST, customer lookup, orders) and directly queries Django models.
+  - Returns real-time ERP data formatted in clean GitHub-flavored Markdown.
 
 ---
 
-## 🏗️ Technical Stack
-- **Server Runtime**: Python `FastMCP` (recommended for seamless interoperability with the Django backend ecosystem) or TypeScript `@modelcontextprotocol/sdk`.
-- **Transport**: Standard Input/Output (`stdio`) for local agent runners; Server-Sent Events (`SSE`) for networked/remote deployment.
-- **Validation**: Strict schema definitions using Pydantic / Zod for parameter typing and clear error reporting.
+## 🌐 API Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/mcp/rpc/` | `POST` | Standard JSON-RPC 2.0 endpoint (`tools/list`, `tools/call`, `ping`) |
+| `/api/mcp/tools/` | `GET` | REST endpoint listing all registered tools and parameter schemas |
+| `/api/mcp/chat/` | `POST` | Natural language Retail Copilot assistant endpoint |
+| `/api/mcp/test-connection/` | `POST` | Provider and model connectivity ping test endpoint |
 
 ---
 
-## 📋 Implementation Checklist
+## 💻 Frontend UI Integration
 
-### Phase 1: Foundation & Transport
-- [ ] Initialize MCP server project structure with FastMCP runtime.
-- [ ] Implement API key authentication and tenant organization resolution middleware.
-- [ ] Establish stdio transport runner and health check.
-
-### Phase 2: Core Read Tools
-- [ ] Implement `get_store_inventory` and `audit_stock_movement`.
-- [ ] Implement `search_master_catalog` and `verify_global_catalogue_item`.
-- [ ] Implement `get_daily_sales_summary` and `lookup_customer_by_phone`.
-
-### Phase 3: Mutating Tools & Safety Gates
-- [ ] Implement `create_stock_adjustment` with confirmation prompts.
-- [ ] Implement `draft_purchase_order` / `draft_stock_transfer`.
-- [ ] Integrate with Antigravity / Claude Desktop configuration files.
-
-### Phase 4: Guided Prompts & Intelligence
-- [ ] Add `daily_store_opening_briefing` prompt template.
-- [ ] Add `inventory_replenishment_advisor` prompt template.
+1. **AI Copilot Drawer (`frontend/src/features/copilot/components/CopilotDrawer.tsx`)**:
+   - Top navbar sparkles action button.
+   - Quick retail prompt suggestion chips.
+   - Tool execution transparency pills showing arguments and execution status.
+   - Rich Markdown renderer supporting tables, code, and Indian Rupee (₹) amounts.
+2. **AI & MCP Settings Page (`/ai-settings`)**:
+   - Provider picker (OpenRouter, OpenAI, Custom/Ollama).
+   - Popular model selectors (`gpt-4o-mini`, `gpt-4o`, `claude-3.5-sonnet`, `llama-3.3-70b`).
+   - Client-side masked API key management in `localStorage`.
+   - Live connection test ping with model sample preview.
+   - Active MCP tools catalog inspection.
