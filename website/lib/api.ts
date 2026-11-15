@@ -19,6 +19,7 @@ export interface OnboardPayload {
   store_name?: string;
   store_address?: string;
   gst_number?: string;
+  password?: string;
 }
 
 export async function verifyGoogleToken(idToken: string): Promise<GoogleAuthResponse> {
