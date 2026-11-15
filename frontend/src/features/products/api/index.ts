@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
+import type { PaginatedResponse, PaginationParams } from '../../../types/pagination';
 import type {
   Brand,
   Category,
@@ -13,8 +14,7 @@ import type {
   BulkAdoptCataloguePayload,
 } from '../types';
 
-
-export interface ProductFilterParams {
+export interface ProductFilterParams extends PaginationParams {
   organization_id?: string;
   category_id?: string;
   subcategory_id?: string;
@@ -23,11 +23,14 @@ export interface ProductFilterParams {
   search?: string;
 }
 
-export function useProducts(params?: ProductFilterParams) {
+export function usePaginatedProducts(params?: ProductFilterParams) {
   return useQuery({
-    queryKey: ['products', params],
+    queryKey: ['products', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.organization_id) queryParams.organization_id = params.organization_id;
       if (params?.category_id) queryParams.category_id = params.category_id;
       if (params?.subcategory_id) queryParams.subcategory_id = params.subcategory_id;
@@ -35,7 +38,56 @@ export function useProducts(params?: ProductFilterParams) {
       if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
       if (params?.search) queryParams.search = params.search;
 
-      const response = await api.get<Product[]>('/api/products/', {
+      const response = await api.get<PaginatedResponse<Product>>('/api/products/', {
+        params: queryParams,
+      });
+      return response.data;
+    },
+  });
+}
+
+export function useProducts(params?: ProductFilterParams) {
+  return useQuery({
+    queryKey: ['products', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = { page_size: '100' };
+      if (params?.organization_id) queryParams.organization_id = params.organization_id;
+      if (params?.category_id) queryParams.category_id = params.category_id;
+      if (params?.subcategory_id) queryParams.subcategory_id = params.subcategory_id;
+      if (params?.brand_id) queryParams.brand_id = params.brand_id;
+      if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<PaginatedResponse<Product> | Product[]>('/api/products/', {
+        params: queryParams,
+      });
+      if (Array.isArray(response.data)) return response.data;
+      return response.data.results || [];
+    },
+  });
+}
+
+export interface CategoryFilterParams extends PaginationParams {
+  parent?: string | null;
+  organization_id?: string;
+  search?: string;
+  is_active?: boolean;
+}
+
+export function usePaginatedCategories(params?: CategoryFilterParams) {
+  return useQuery({
+    queryKey: ['categories', 'paginated', params],
+    queryFn: async () => {
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
+      if (params?.parent !== undefined) queryParams.parent = params.parent ?? 'null';
+      if (params?.organization_id) queryParams.organization_id = params.organization_id;
+      if (params?.search) queryParams.search = params.search;
+      if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
+
+      const response = await api.get<PaginatedResponse<Category>>('/api/products/categories/', {
         params: queryParams,
       });
       return response.data;
@@ -47,14 +99,15 @@ export function useCategories(parent?: string | null, organizationId?: string) {
   return useQuery({
     queryKey: ['categories', parent, organizationId],
     queryFn: async () => {
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = { page_size: '100' };
       if (parent !== undefined) params.parent = parent ?? 'null';
       if (organizationId) params.organization_id = organizationId;
 
-      const response = await api.get<Category[]>('/api/products/categories/', {
-        params: Object.keys(params).length ? params : undefined,
+      const response = await api.get<PaginatedResponse<Category> | Category[]>('/api/products/categories/', {
+        params,
       });
-      return response.data;
+      if (Array.isArray(response.data)) return response.data;
+      return response.data.results || [];
     },
   });
 }
@@ -63,10 +116,14 @@ export function useOrganizationCategories(organizationId?: string) {
   return useQuery({
     queryKey: ['organization-categories', organizationId],
     queryFn: async () => {
-      const response = await api.get<OrganizationCategory[]>('/api/products/organization-categories/', {
-        params: organizationId ? { organization_id: organizationId } : undefined,
-      });
-      return response.data;
+      const params: Record<string, any> = { page_size: 100 };
+      if (organizationId) params.organization_id = organizationId;
+      const response = await api.get<PaginatedResponse<OrganizationCategory> | OrganizationCategory[]>(
+        '/api/products/organization-categories/',
+        { params }
+      );
+      if (Array.isArray(response.data)) return response.data;
+      return response.data.results || [];
     },
   });
 }
@@ -81,27 +138,50 @@ export function useCategoryTree() {
   });
 }
 
-export interface SubcategoryFilterParams {
+export interface SubcategoryFilterParams extends PaginationParams {
   organization_id?: string;
   category_id?: string;
   is_active?: boolean;
   search?: string;
 }
 
-export function useSubcategories(params?: SubcategoryFilterParams) {
+export function usePaginatedSubcategories(params?: SubcategoryFilterParams) {
   return useQuery({
-    queryKey: ['subcategories', params],
+    queryKey: ['subcategories', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.organization_id) queryParams.organization_id = params.organization_id;
       if (params?.category_id) queryParams.category_id = params.category_id;
       if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
       if (params?.search) queryParams.search = params.search;
 
-      const response = await api.get<Subcategory[]>('/api/products/subcategories/', {
+      const response = await api.get<PaginatedResponse<Subcategory>>('/api/products/subcategories/', {
         params: queryParams,
       });
       return response.data;
+    },
+    enabled: params ? !!(params.organization_id || params.category_id) : true,
+  });
+}
+
+export function useSubcategories(params?: SubcategoryFilterParams) {
+  return useQuery({
+    queryKey: ['subcategories', params],
+    queryFn: async () => {
+      const queryParams: Record<string, any> = { page_size: 100 };
+      if (params?.organization_id) queryParams.organization_id = params.organization_id;
+      if (params?.category_id) queryParams.category_id = params.category_id;
+      if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<PaginatedResponse<Subcategory> | Subcategory[]>('/api/products/subcategories/', {
+        params: queryParams,
+      });
+      if (Array.isArray(response.data)) return response.data;
+      return response.data.results || [];
     },
     enabled: params ? !!(params.organization_id || params.category_id) : true,
   });
@@ -147,14 +227,43 @@ export function useDeleteSubcategory() {
   });
 }
 
-export function useBrands(organizationId?: string) {
+export interface BrandFilterParams extends PaginationParams {
+  organization_id?: string;
+  search?: string;
+}
+
+export function usePaginatedBrands(params?: BrandFilterParams) {
   return useQuery({
-    queryKey: ['brands', organizationId],
+    queryKey: ['brands', 'paginated', params],
     queryFn: async () => {
-      const response = await api.get<Brand[]>('/api/products/brands/', {
-        params: organizationId ? { organization_id: organizationId } : undefined,
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
+      if (params?.organization_id) queryParams.organization_id = params.organization_id;
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<PaginatedResponse<Brand>>('/api/products/brands/', {
+        params: queryParams,
       });
       return response.data;
+    },
+  });
+}
+
+export function useBrands(organizationId?: string, search?: string) {
+  return useQuery({
+    queryKey: ['brands', organizationId, search],
+    queryFn: async () => {
+      const params: Record<string, any> = { page_size: 100 };
+      if (organizationId) params.organization_id = organizationId;
+      if (search) params.search = search;
+
+      const response = await api.get<PaginatedResponse<Brand> | Brand[]>('/api/products/brands/', {
+        params,
+      });
+      if (Array.isArray(response.data)) return response.data;
+      return response.data.results || [];
     },
   });
 }

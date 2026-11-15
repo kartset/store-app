@@ -40,12 +40,13 @@ import {
 
 import { useState, useMemo } from 'react';
 import {
-  useProducts,
+  usePaginatedProducts,
   useCategories,
   useBrands,
   useSubcategories,
   useDeleteProduct,
 } from '../api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import { ProductDrawer } from './ProductDrawer';
 import { BarcodeStickerModal } from './BarcodeStickerModal';
 import { AdoptCatalogueModal } from './AdoptCatalogueModal';
@@ -80,14 +81,25 @@ export function ProductList() {
     return false;
   }, [user, currentStore]);
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [subcategoryFilter, setSubcategoryFilter] = useState<string | null>(null);
   const [brandFilter, setBrandFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Fetch products, categories, subcategories, brands
-  const { data: products, isLoading, error } = useProducts();
+  // Fetch paginated products, categories, subcategories, brands
+  const { data: paginatedData, isLoading, error } = usePaginatedProducts({
+    page,
+    page_size: pageSize,
+    search: searchQuery.trim() || undefined,
+    category_id: categoryFilter || undefined,
+    subcategory_id: subcategoryFilter || undefined,
+    brand_id: brandFilter || undefined,
+    is_active: statusFilter === 'all' ? undefined : statusFilter === 'active',
+  });
+  const filteredProducts = paginatedData?.results || [];
   const { data: categories } = useCategories();
   const { data: subcategories } = useSubcategories(
     categoryFilter ? { category_id: categoryFilter } : undefined
@@ -116,48 +128,17 @@ export function ProductList() {
   const handleCategoryFilterChange = (val: string | null) => {
     setCategoryFilter(val);
     setSubcategoryFilter(null);
+    setPage(1);
   };
-
-  // Filter products locally for instantaneous UI responsiveness
-  const filteredProducts = useMemo(() => {
-    if (!products) return [];
-    return products.filter((prod) => {
-      // Category filter
-      if (categoryFilter && prod.category_id !== categoryFilter) return false;
-      // Subcategory filter
-      if (subcategoryFilter && prod.subcategory_id !== subcategoryFilter) return false;
-      // Brand filter
-      if (brandFilter && prod.brand_id !== brandFilter) return false;
-      // Status filter
-      if (statusFilter === 'active' && !prod.is_active) return false;
-      if (statusFilter === 'inactive' && prod.is_active) return false;
-
-      // Text Search across Name, SKU, Barcode, Internal Barcode
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = prod.name?.toLowerCase().includes(q);
-        const matchesSku = prod.sku?.toLowerCase().includes(q);
-        const matchesBarcode = prod.barcode?.toLowerCase().includes(q);
-        const matchesInternal = prod.internal_barcode?.toLowerCase().includes(q);
-        const matchesHsn = prod.hsn_code?.toLowerCase().includes(q);
-        const matchesSub = prod.subcategory?.name?.toLowerCase().includes(q);
-        if (!matchesName && !matchesSku && !matchesBarcode && !matchesInternal && !matchesHsn && !matchesSub) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [products, categoryFilter, subcategoryFilter, brandFilter, statusFilter, searchQuery]);
 
   // KPI Calculations
   const stats = useMemo(() => {
-    if (!products || products.length === 0) {
-      return { total: 0, active: 0, avgMargin: 0, categoriesCount: 0 };
+    const total = paginatedData?.count ?? 0;
+    if (!filteredProducts || filteredProducts.length === 0) {
+      return { total, active: 0, avgMargin: 0, categoriesCount: 0 };
     }
-    const total = products.length;
-    const active = products.filter((p) => p.is_active).length;
-    const margins = products
+    const active = filteredProducts.filter((p) => p.is_active).length;
+    const margins = filteredProducts
       .map((p) => {
         const mrp = Number(p.base_mrp) || 0;
         const cost = Number(p.cost_price) || 0;
@@ -165,10 +146,10 @@ export function ProductList() {
       })
       .filter((m) => m > 0);
     const avgMargin = margins.length ? (margins.reduce((a, b) => a + b, 0) / margins.length).toFixed(1) : 0;
-    const uniqueCats = new Set(products.map((p) => p.category_id).filter(Boolean)).size;
+    const uniqueCats = new Set(filteredProducts.map((p) => p.category_id).filter(Boolean)).size;
 
     return { total, active, avgMargin, categoriesCount: uniqueCats };
-  }, [products]);
+  }, [paginatedData, filteredProducts]);
 
   return (
     <Box>
@@ -363,7 +344,10 @@ export function ProductList() {
             placeholder="Search Name, SKU, Barcode, Subcategory..."
             leftSection={<IconSearch size={16} />}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.currentTarget.value)}
+            onChange={(e) => {
+              setSearchQuery(e.currentTarget.value);
+              setPage(1);
+            }}
           />
 
           {/* Category Filter */}
@@ -383,7 +367,10 @@ export function ProductList() {
             leftSection={<IconCategory size={16} />}
             data={subcategories?.map((s) => ({ value: s.id, label: s.name })) || []}
             value={subcategoryFilter}
-            onChange={setSubcategoryFilter}
+            onChange={(val) => {
+              setSubcategoryFilter(val);
+              setPage(1);
+            }}
             clearable
             searchable
             disabled={!categoryFilter && (!subcategories || subcategories.length === 0)}
@@ -394,7 +381,10 @@ export function ProductList() {
             placeholder="All Brands"
             data={brands?.map((b) => ({ value: b.id, label: b.name })) || []}
             value={brandFilter}
-            onChange={setBrandFilter}
+            onChange={(val) => {
+              setBrandFilter(val);
+              setPage(1);
+            }}
             clearable
             searchable
           />
@@ -402,7 +392,10 @@ export function ProductList() {
           {/* Active / Inactive Status */}
           <SegmentedControl
             value={statusFilter}
-            onChange={setStatusFilter}
+            onChange={(val) => {
+              setStatusFilter(val);
+              setPage(1);
+            }}
             data={[
               { label: 'All', value: 'all' },
               { label: 'Active', value: 'active' },
@@ -739,6 +732,16 @@ export function ProductList() {
             </Table>
           </Table.ScrollContainer>
         )}
+
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalCount={paginatedData?.count ?? 0}
+          totalPages={paginatedData?.total_pages ?? 1}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          disabled={isLoading}
+        />
       </Card>
 
       {/* Product Drawer */}
