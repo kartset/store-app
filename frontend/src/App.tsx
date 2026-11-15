@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginForm } from './features/auth/components/LoginForm';
+import { AuthCallback } from './features/auth/components/AuthCallback';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { OrganizationList } from './features/organizations/components/OrganizationList';
 import { StoreList } from './features/stores/components/StoreList';
@@ -22,6 +23,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginForm />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       
       {/* Protected Dashboard Routes */}
       <Route path="/" element={<DashboardLayout />}>

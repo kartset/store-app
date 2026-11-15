@@ -5,8 +5,9 @@ genai-exec-platform-ai-sdlc
 node_modules/
 dist/
 build/
-# Compiled ARM templates (generated from Bicep)
-infra/landing-zone/governance.json
+# Next.js build artifacts
+.next/
+out/
 
 # Temp build artifacts
 bicep_*.txt

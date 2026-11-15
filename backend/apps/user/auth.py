@@ -1,5 +1,6 @@
 from django.contrib.auth.backends import BaseBackend
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from db.models import User
 
 

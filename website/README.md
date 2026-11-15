@@ -1,77 +1,52 @@
 # Store App — Public Website & Organization Onboarding
 
 ## Overview
-This directory contains the public-facing marketing website and self-serve onboarding portal for **Store App**. It serves as the primary acquisition channel and the entry point where retail business owners and franchise operators discover the platform, register their company, configure their flagship store, and provision their initial administrator credentials.
+This directory contains the public-facing marketing website and self-serve onboarding portal for **Store App**, built with **Next.js 14 (App Router)** and **Tailwind CSS**. It serves as the primary acquisition channel where retail business owners discover the platform, verify their Google identity, configure their organization and flagship store, and seamlessly transition into the operational POS & ERP dashboard.
 
 ---
 
-## 🎯 Core Objectives
-1. **Product Presentation & Value Proposition**: Educate prospective retailers on Store App's offline-resilient POS, dual-barcode catalog, automated GST compliance, and multi-store inventory engine.
-2. **Self-Serve Organization Registration**: Guide the first administrative user through a frictionless, compliant company registration workflow.
-3. **Seamless Dashboard Hand-off**: Automatically provision the tenant organization and redirect the authenticated owner directly into the Store App operational dashboard.
+## 🎯 Features Implemented
+1. **Modern Marketing Landing Page (`/`)**:
+   - Modern dark-mode StoreCraft design with high-impact hero, real-time metrics, interactive feature highlights (Thermal POS, 4-tier Catalog with Dual Barcodes, Indian GST Engine), multi-tenant architecture breakdown, and tier pricing.
+   - Global navigation with direct login and "Get Started" CTAs.
+2. **Interactive Self-Serve Onboarding Wizard (`/onboard`)**:
+   - **Step 1: Google Identity Verification**: Direct sign-in with Google ID token, plus a 1-Click Demo Owner option for instant local testing.
+   - **Step 2: Organization Profile**: Business name, auto-slugified unique subdomain preview (e.g. `apex-retail.storeapp.local`), and industry selection.
+   - **Step 3: Flagship Store Setup**: Initial store name (defaults to "Main Flagship Store"), store address, and optional GSTIN. Automatically informs the user of assigned roles (`ORG_ADMIN` + `STORE_ADMIN`).
+   - **Step 4: Atomic Tenant Provisioning & Handoff**: Communicates with the Django backend, creates the tenant, and immediately redirects the authenticated owner into the Store App dashboard at `http://localhost:5173/auth/callback`.
+3. **Backend API Endpoints (`backend/apps/user/`)**:
+   - `POST /api/users/auth/google/`: Validates Google ID tokens and checks for existing tenant memberships.
+   - `POST /api/users/auth/onboard-organization/`: Atomically provisions `User`, `Organization`, flagship `Store`, `OrganizationStaff` (`ORG_ADMIN`), and `StoreStaff` (`ADMIN`), returning complete JWT access/refresh credentials.
+4. **Cross-Port Authentication Handoff (`frontend/src/features/auth/components/AuthCallback.tsx`)**:
+   - Receives JWT session parameters from the website, stores them securely in `localStorage`, and forwards the user to `/` (or `/pos`).
+5. **Docker Integration**:
+   - Containerized via `docker/website.Dockerfile`.
+   - Added as a `website` service in `docker/docker-compose.yml` exposed on port `3000:3000`.
 
 ---
 
-## 🧭 The Onboarding Journey (Step-by-Step)
+## 🚀 Running Locally
 
-```text
-Visitor ──► Landing Page ──► Register Org ──► Create Store ──► Admin Credentials ──► Provision Tenant ──► Store App Dashboard
+### Via Docker Compose
+From the repository root:
+```bash
+docker compose -f docker/docker-compose.yml up website
+```
+The website will be live at `http://localhost:3000`.
+
+### Via Node / npm
+From the `website/` folder:
+```bash
+cd website
+npm install
+npm run dev
 ```
 
-### 1. Landing & Product Overview
-- **Key Modules Highlighted**: High-speed thermal POS, 4-tier inventory master catalog, multi-vendor procurement & GRN, customer 360 & loyalty, and real-time GST filing.
-- **Interactive Demonstrations**: Barcode scanning demo, receipt preview, and pricing tier calculator.
-
-### 2. Multi-Step Onboarding Wizard (`/onboarding`)
-- **Step 1: Business Profile**:
-  - Legal business name and trade name.
-  - 15-digit Indian GSTIN with state code validation and automated PAN extraction.
-  - Business structure (Sole Proprietorship, Partnership, Pvt Ltd, Franchise).
-  - Business address, State/UT, and PIN code.
-- **Step 2: Flagship Store Setup**:
-  - Initial branch name (e.g., "Main Street Flagship", "Connaught Place Store").
-  - Store code / receipt sequence prefix (e.g., `CP01-`).
-  - Store physical address, contact phone, and operating state (for intra-state vs inter-state tax logic).
-- **Step 3: Organization Owner Account**:
-  - Primary administrator's full name, work email, and 10-digit mobile number.
-  - Secure password and multi-factor authentication (MFA) preference.
-- **Step 4: Subscription & Activation**:
-  - Tier selection (Starter, Multi-Store Pro, Enterprise).
-  - Optional trial period activation without upfront card requirement.
-
-### 3. Tenant Provisioning & Hand-off
-- Submits structured payload to the backend tenant onboarding endpoint (`POST /api/auth/register-org/`).
-- Receives JWT session token pair (`access_token`, `refresh_token`) and tenant organization context.
-- Stores secure session and executes seamless redirection into the Store App management console (`/dashboard` or `/pos`).
-
 ---
 
-## 🏗️ Planned Tech Stack & Architecture
-- **Framework**: Modern React framework (Next.js App Router or Vite + React SPA).
-- **Styling**: Tailored design tokens aligned with the StoreCraft design language (clean typography, crisp form layouts, responsive mobile viewports).
-- **State Management**: Lightweight form state (Zod validation schemas + React Hook Form).
-- **Backend API Integration**: Direct HTTPS REST calls against Django backend endpoints:
-  - `POST /api/auth/validate-gstin/`
-  - `POST /api/auth/register-organization/`
-  - `GET /api/public/plans/`
-
----
-
-## 📋 Implementation Checklist
-
-### Phase 1: Marketing & Landing Experience
-- [ ] Responsive landing page with hero banner, feature grid, and pricing cards.
-- [ ] Feature spotlight sections: POS cashier mode, inventory audit ledger, customer loyalty.
-- [ ] Hardware compatibility guide (Thermal printers, barcode scanners, cash drawers).
-
-### Phase 2: Organization Onboarding Wizard
-- [ ] Multi-step form container with state persistence and back/forward navigation.
-- [ ] Real-time GSTIN validation and state code resolution.
-- [ ] Primary store configuration fields and receipt prefix generator.
-- [ ] Administrator credential form with password strength metering.
-
-### Phase 3: Tenant Integration & Provisioning
-- [ ] Backend client integration (`/api/auth/register-organization/`).
-- [ ] Tenant provisioning loading screen with status polling.
-- [ ] Automated session generation and hand-off redirect to the Store App dashboard.
-- [ ] Welcome email and initial onboarding checklist trigger.
+## ⚙️ Environment Configuration
+Configure in `.env`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_DASHBOARD_URL=http://localhost:5173
+```
