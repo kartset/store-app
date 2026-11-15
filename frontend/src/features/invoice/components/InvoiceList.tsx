@@ -35,8 +35,9 @@ import {
   IconTrendingUp,
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
-import { useCreditNotes, useDailySummary, useInvoices } from '../api';
+import { useCreditNotes, useDailySummary, usePaginatedInvoices } from '../api';
 import { useStores } from '../../stores/api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import { InvoiceDetailsDrawer } from './InvoiceDetailsDrawer';
 import { ThermalReceiptModal } from './ThermalReceiptModal';
 import { ThermalCreditNoteModal } from './ThermalCreditNoteModal';
@@ -71,17 +72,25 @@ export function InvoiceList() {
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'ALL'>('ALL');
   const [typeFilter, setTypeFilter] = useState<InvoiceType | 'ALL'>('ALL');
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
   // Query Invoices
   const filterParams = useMemo(() => {
-    const params: Record<string, any> = {};
+    const params: Record<string, any> = {
+      page,
+      page_size: pageSize,
+    };
     if (activeStoreId) params.store_id = activeStoreId;
     if (statusFilter !== 'ALL') params.status = statusFilter;
     if (typeFilter !== 'ALL') params.type = typeFilter;
     if (search.trim()) params.search = search.trim();
     return params;
-  }, [activeStoreId, statusFilter, typeFilter, search]);
+  }, [page, pageSize, activeStoreId, statusFilter, typeFilter, search]);
 
-  const { data: invoices, isLoading, refetch } = useInvoices(filterParams);
+  const { data: paginatedData, isLoading, refetch } = usePaginatedInvoices(filterParams);
+  const invoices = paginatedData?.results || [];
   const { data: summary, refetch: refetchSummary } = useDailySummary(activeStoreId || undefined);
 
   // Active Tab & Credit Notes
@@ -256,7 +265,10 @@ export function InvoiceList() {
               placeholder="Select store"
               data={stores?.map((s) => ({ value: s.id, label: s.name })) || []}
               value={activeStoreId}
-              onChange={(val) => setSelectedStoreId(val || '')}
+              onChange={(val) => {
+                setSelectedStoreId(val || '');
+                setPage(1);
+              }}
               leftSection={<IconBuildingStore size={16} />}
               disabled={storesLoading}
               clearable={false}
@@ -266,7 +278,10 @@ export function InvoiceList() {
               label="Search Invoices"
               placeholder="Search by invoice # or customer phone..."
               value={search}
-              onChange={(e) => setSearch(e.currentTarget.value)}
+              onChange={(e) => {
+                setSearch(e.currentTarget.value);
+                setPage(1);
+              }}
               leftSection={<IconSearch size={16} />}
             />
 
@@ -279,7 +294,10 @@ export function InvoiceList() {
                 { value: 'CANCELLED', label: 'Cancelled' },
               ]}
               value={statusFilter}
-              onChange={(val) => setStatusFilter((val as InvoiceStatus) || 'ALL')}
+              onChange={(val) => {
+                setStatusFilter((val as InvoiceStatus) || 'ALL');
+                setPage(1);
+              }}
             />
 
             <Select
@@ -291,7 +309,10 @@ export function InvoiceList() {
                 { value: 'RETURN', label: 'Return / Credit Note' },
               ]}
               value={typeFilter}
-              onChange={(val) => setTypeFilter((val as InvoiceType) || 'ALL')}
+              onChange={(val) => {
+                setTypeFilter((val as InvoiceType) || 'ALL');
+                setPage(1);
+              }}
             />
           </SimpleGrid>
         </Paper>
@@ -307,7 +328,7 @@ export function InvoiceList() {
                 label: (
                   <Group gap={6}>
                     <IconFileInvoice size={14} />
-                    <span>Invoices ({invoices?.length || 0})</span>
+                    <span>Invoices ({paginatedData?.count ?? invoices.length})</span>
                   </Group>
                 ),
               },
@@ -487,6 +508,18 @@ export function InvoiceList() {
               </Table.Tbody>
             </Table>
           )}
+
+          <Box p="md" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            <TablePagination
+              page={page}
+              pageSize={pageSize}
+              totalCount={paginatedData?.count ?? 0}
+              totalPages={paginatedData?.total_pages ?? 1}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              disabled={isLoading}
+            />
+          </Box>
         </Paper>
         ) : (
           /* Credit Notes / Sales Returns Data Table */

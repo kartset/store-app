@@ -35,12 +35,13 @@ import {
   IconTruckDelivery,
 } from '@tabler/icons-react';
 import {
-  useOrders,
+  usePaginatedOrders,
   useOrderStats,
   useConfirmOrder,
   usePackOrder,
   useReadyOrder,
 } from '../api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import { useStores } from '../../stores/api';
 import { useInvoice } from '../../invoice/api';
 import { ThermalReceiptModal } from '../../invoice/components/ThermalReceiptModal';
@@ -84,17 +85,25 @@ export function OrderList() {
   // Stores
   const { data: stores = [] } = useStores();
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
   // Queries
   const filterParams = useMemo(() => {
-    const params: any = {};
+    const params: any = {
+      page,
+      page_size: pageSize,
+    };
     if (selectedStoreId) params.store_id = selectedStoreId;
     if (activeTab !== 'ALL') params.status = activeTab;
     if (fulfillmentFilter !== 'ALL') params.fulfillment_type = fulfillmentFilter;
     if (search.trim()) params.search = search.trim();
     return params;
-  }, [selectedStoreId, activeTab, fulfillmentFilter, search]);
+  }, [page, pageSize, selectedStoreId, activeTab, fulfillmentFilter, search]);
 
-  const { data: orders = [], isLoading, refetch } = useOrders(filterParams);
+  const { data: paginatedData, isLoading, refetch } = usePaginatedOrders(filterParams);
+  const orders = paginatedData?.results || [];
   const { data: stats } = useOrderStats(selectedStoreId || undefined);
 
   // Quick Action Mutations
@@ -334,7 +343,13 @@ export function OrderList() {
         <Paper p="sm" radius="md" withBorder bg="var(--bg-surface)">
           <Stack gap="sm">
             <Group justify="space-between" wrap="wrap">
-              <Tabs value={activeTab} onChange={(val) => setActiveTab(val || 'ALL')}>
+              <Tabs
+                value={activeTab}
+                onChange={(val) => {
+                  setActiveTab(val || 'ALL');
+                  setPage(1);
+                }}
+              >
                 <Tabs.List>
                   <Tabs.Tab value="ALL">All Orders</Tabs.Tab>
                   <Tabs.Tab
@@ -378,7 +393,10 @@ export function OrderList() {
                     { value: 'COUNTER_HOLD', label: 'Counter Hold' },
                   ]}
                   value={fulfillmentFilter}
-                  onChange={(val) => setFulfillmentFilter(val || 'ALL')}
+                  onChange={(val) => {
+                    setFulfillmentFilter(val || 'ALL');
+                    setPage(1);
+                  }}
                   size="xs"
                   style={{ width: 160 }}
                 />
@@ -387,7 +405,10 @@ export function OrderList() {
                   placeholder="Search order #, customer, phone..."
                   leftSection={<IconSearch size={14} />}
                   value={search}
-                  onChange={(e) => setSearch(e.currentTarget.value)}
+                  onChange={(e) => {
+                    setSearch(e.currentTarget.value);
+                    setPage(1);
+                  }}
                   size="xs"
                   style={{ width: 240 }}
                 />
@@ -595,6 +616,18 @@ export function OrderList() {
               </Table.Tbody>
             </Table>
           )}
+
+          <Box p="md" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            <TablePagination
+              page={page}
+              pageSize={pageSize}
+              totalCount={paginatedData?.count ?? 0}
+              totalPages={paginatedData?.total_pages ?? 1}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              disabled={isLoading}
+            />
+          </Box>
         </Paper>
       </Stack>
 

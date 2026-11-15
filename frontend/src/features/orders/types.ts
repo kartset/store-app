@@ -1,3 +1,5 @@
+import type { PaginationParams } from '../../types/pagination';
+
 export type OrderStatus =
   | 'PENDING'
   | 'CONFIRMED'
@@ -87,7 +89,7 @@ export interface Order {
   updated_at: string;
 }
 
-export interface OrderFilterParams {
+export interface OrderFilterParams extends PaginationParams {
   store_id?: string;
   customer_id?: string;
   status?: string;

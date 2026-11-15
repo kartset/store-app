@@ -1,3 +1,5 @@
+import type { PaginationParams } from '../../types/pagination';
+
 export type InvoiceType = 'POS' | 'ONLINE' | 'RETURN';
 export type InvoiceStatus = 'DRAFT' | 'PAID' | 'PARTIALLY_PAID' | 'CANCELLED';
 export type PaymentMethod = 'CASH' | 'CARD' | 'UPI' | 'RAZORPAY' | 'STORE_CREDIT' | 'LOYALTY_POINTS';
@@ -82,7 +84,7 @@ export interface Invoice {
   payments: InvoicePayment[];
 }
 
-export interface InvoiceFilterParams {
+export interface InvoiceFilterParams extends PaginationParams {
   store_id?: string;
   customer_id?: string;
   status?: InvoiceStatus;
