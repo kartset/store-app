@@ -16,7 +16,6 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
-  IconBuildingSkyscraper,
   IconBuildingStore,
   IconPackage,
   IconLogout,
@@ -477,28 +476,6 @@ export function DashboardLayout() {
               }
               onClick={() => navigate('/orders')}
               active={location.pathname === '/orders'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="Organizations"
-              description="Tenants & franchises"
-              leftSection={
-                <ThemeIcon
-                  size={28}
-                  radius="md"
-                  color={location.pathname === '/organizations' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/organizations' ? 'filled' : 'light'}
-                >
-                  <IconBuildingSkyscraper size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/organizations')}
-              active={location.pathname === '/organizations'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
