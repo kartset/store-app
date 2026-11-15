@@ -10,3 +10,12 @@ export const useLogin = () => {
     },
   });
 };
+
+export const useGoogleLogin = () => {
+  return useMutation({
+    mutationFn: async (idToken: string) => {
+      const response = await api.post('/api/users/auth/google/', { id_token: idToken });
+      return response.data;
+    },
+  });
+};

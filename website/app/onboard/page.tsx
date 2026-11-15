@@ -36,6 +36,8 @@ export default function OnboardPage() {
   const [storeName, setStoreName] = useState('Main Flagship Store');
   const [storeAddress, setStoreAddress] = useState('');
   const [gstNumber, setGstNumber] = useState('');
+  const [password, setPassword] = useState('StorePass123!');
+  const [confirmPassword, setConfirmPassword] = useState('StorePass123!');
 
   const [provisionStatus, setProvisionStatus] = useState<string>('Initializing...');
 
@@ -84,6 +86,15 @@ export default function OnboardPage() {
 
   // Step 4: Provision Organization & Store
   const handleFinalSubmit = async () => {
+    if (!password || password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match. Please re-enter.');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage(null);
     setStep(4);
@@ -94,7 +105,7 @@ export default function OnboardPage() {
       setProvisionStatus('Creating organization tenant & subdomain...');
 
       await new Promise((r) => setTimeout(r, 600));
-      setProvisionStatus('Configuring flagship store, registers, and inventory catalogs...');
+      setProvisionStatus('Configuring flagship store, registers, and administrator credentials...');
 
       const payload = {
         id_token: googleToken,
@@ -103,6 +114,7 @@ export default function OnboardPage() {
         store_name: storeName || 'Main Flagship Store',
         store_address: storeAddress,
         gst_number: gstNumber,
+        password: password,
       };
 
       const result = await onboardOrganization(payload);
@@ -412,6 +424,37 @@ export default function OnboardPage() {
                 <p className="text-[11px] text-slate-500 mt-1">
                   Optional during onboarding. Can be configured later in Store Settings.
                 </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-800">
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Administrator Password for Store App *
+                </label>
+                <p className="text-[11px] text-slate-400 mb-2.5">
+                  Set a password to log in directly to the Store App terminal ({verifiedGoogleUser?.email || 'your email'}) using email and password.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password (min 6 characters)"
+                      className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 focus:border-emerald-500 text-white text-sm outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm password"
+                      className="w-full px-3.5 py-2.5 rounded-lg bg-slate-950 border border-slate-800 focus:border-emerald-500 text-white text-sm outline-none transition-colors"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Summary of Roles */}
