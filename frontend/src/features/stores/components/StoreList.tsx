@@ -8,12 +8,16 @@ import {
   Badge,
   Group,
   TextInput,
+  Textarea,
   Button,
   SimpleGrid,
   ThemeIcon,
   Box,
   ActionIcon,
   Tooltip,
+  Modal,
+  Stack,
+  Alert,
 } from '@mantine/core';
 import {
   IconBuildingStore,
@@ -24,13 +28,67 @@ import {
   IconReceiptTax,
   IconDeviceDesktop,
   IconDotsVertical,
+  IconAlertCircle,
 } from '@tabler/icons-react';
-import { useStores } from '../api';
 import { useState, useMemo } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useStores, useCreateStore } from '../api';
 
 export function StoreList() {
-  const { data: stores, isLoading, error } = useStores();
+  // Read authenticated user & active store role from localStorage
+  const user = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const currentStore = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('current_store');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Determine if current user has Org Admin rights
+  const isOrgAdmin = useMemo(() => {
+    if (user?.is_org_admin) return true;
+    if (user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN') return true;
+    if (currentStore?.role === 'ORG_ADMIN') return true;
+    if (user?.organizations?.some((o: { role?: string }) => o.role === 'ORG_ADMIN')) return true;
+    return false;
+  }, [user, currentStore]);
+
+  // Derive active organization ID
+  const activeOrgId = useMemo(() => {
+    if (currentStore?.organization_id) return currentStore.organization_id;
+    if (user?.organizations?.[0]?.id) return user.organizations[0].id;
+    return undefined;
+  }, [currentStore, user]);
+
+  // Restrict access for non-org-admin store staff: redirect directly to Counter POS
+  if (!isOrgAdmin) {
+    return <Navigate to="/pos" replace />;
+  }
+
+  return <StoreListContent activeOrgId={activeOrgId} />;
+}
+
+function StoreListContent({ activeOrgId }: { activeOrgId?: string }) {
+  const { data: stores, isLoading, error } = useStores({ organization_id: activeOrgId });
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Add Store Modal state
+  const [modalOpened, setModalOpened] = useState(false);
+  const [name, setName] = useState('');
+  const [gstNumber, setGstNumber] = useState('');
+  const [address, setAddress] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const createStoreMutation = useCreateStore();
 
   const filteredStores = useMemo(() => {
     if (!stores) return [];
@@ -43,6 +101,39 @@ export function StoreList() {
         store.address?.toLowerCase().includes(q)
     );
   }, [stores, searchQuery]);
+
+  const handleOpenModal = () => {
+    setName('');
+    setGstNumber('');
+    setAddress('');
+    setErrorMessage('');
+    setModalOpened(true);
+  };
+
+  const handleCreateStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setErrorMessage('Store name is required.');
+      return;
+    }
+
+    try {
+      setErrorMessage('');
+      await createStoreMutation.mutateAsync({
+        name: name.trim(),
+        gst_number: gstNumber.trim() || undefined,
+        address: address.trim() || undefined,
+      });
+      setModalOpened(false);
+    } catch (err: any) {
+      const detail =
+        err.response?.data?.detail ||
+        err.response?.data?.name?.[0] ||
+        err.response?.data?.error ||
+        'Failed to create store. Please try again.';
+      setErrorMessage(detail);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -90,6 +181,7 @@ export function StoreList() {
         <Group gap="sm">
           <Button
             leftSection={<IconPlus size={16} />}
+            onClick={handleOpenModal}
             style={{
               background: 'var(--brand-gradient)',
               boxShadow: 'var(--shadow-sm)',
@@ -296,6 +388,69 @@ export function StoreList() {
           </Table.ScrollContainer>
         )}
       </Card>
+
+      {/* Add Store Modal */}
+      <Modal
+        opened={modalOpened}
+        onClose={() => setModalOpened(false)}
+        title={
+          <Text fw={700} size="md">
+            Add Retail Store Branch
+          </Text>
+        }
+        radius="lg"
+        padding="xl"
+      >
+        <form onSubmit={handleCreateStore}>
+          <Stack gap="md">
+            {errorMessage && (
+              <Alert icon={<IconAlertCircle size={16} />} color="red" radius="md">
+                {errorMessage}
+              </Alert>
+            )}
+
+            <TextInput
+              label="Store Branch Name"
+              placeholder="e.g. Acme Flagship Indiranagar"
+              required
+              value={name}
+              onChange={(e) => setName(e.currentTarget.value)}
+              radius="md"
+            />
+
+            <TextInput
+              label="GST Number"
+              placeholder="e.g. 29ABCDE1234F1Z5"
+              value={gstNumber}
+              onChange={(e) => setGstNumber(e.currentTarget.value)}
+              radius="md"
+            />
+
+            <Textarea
+              label="Physical Address"
+              placeholder="Branch street address, city, pin code..."
+              minRows={3}
+              value={address}
+              onChange={(e) => setAddress(e.currentTarget.value)}
+              radius="md"
+            />
+
+            <Group justify="flex-end" mt="md">
+              <Button variant="default" onClick={() => setModalOpened(false)} radius="md">
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                loading={createStoreMutation.isPending}
+                radius="md"
+                style={{ background: 'var(--brand-gradient)' }}
+              >
+                Create Branch
+              </Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
     </Box>
   );
 }
