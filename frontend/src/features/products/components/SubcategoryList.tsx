@@ -30,7 +30,6 @@ import {
   IconEdit,
   IconTrash,
   IconTags,
-  IconBuildingSkyscraper,
   IconAlertCircle,
   IconCheck,
   IconCategory,
@@ -46,12 +45,9 @@ import {
   useUpdateSubcategory,
   useDeleteSubcategory,
 } from '../api';
-import { useOrganizations } from '../../organizations/api';
 import type { Subcategory } from '../types';
 
 export function SubcategoryList() {
-  const { data: organizations, isLoading: orgsLoading } = useOrganizations();
-  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,33 +66,6 @@ export function SubcategoryList() {
   const [formIsActive, setFormIsActive] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Derive active organization with fallback to user.organizations
-  const activeOrgId = useMemo(() => {
-    if (selectedOrgId) return selectedOrgId;
-    if (organizations && organizations.length > 0) return organizations[0].id;
-    try {
-      const stored = localStorage.getItem('current_store');
-      if (stored) {
-        const store = JSON.parse(stored);
-        if (store.organization_id) return store.organization_id;
-      }
-    } catch {}
-    try {
-      const userStored = localStorage.getItem('user');
-      if (userStored) {
-        const u = JSON.parse(userStored);
-        if (u.organizations && u.organizations.length > 0) {
-          return u.organizations[0].id;
-        }
-      }
-    } catch {}
-    return '';
-  }, [selectedOrgId, organizations]);
-
-  const activeOrg = useMemo(() => {
-    return organizations?.find((o) => o.id === activeOrgId);
-  }, [organizations, activeOrgId]);
-
   // Role detection: Only Org Admins have full access
   const isOrgAdmin = useMemo(() => {
     try {
@@ -114,8 +83,8 @@ export function SubcategoryList() {
   }, []);
 
   // Fetch categories mapped to this organization
-  const { data: orgCategories, isLoading: orgCatsLoading } = useOrganizationCategories(activeOrgId);
-  const { data: platformCategories, isLoading: platformCatsLoading } = useCategories(undefined, activeOrgId);
+  const { data: orgCategories, isLoading: orgCatsLoading } = useOrganizationCategories();
+  const { data: platformCategories, isLoading: platformCatsLoading } = useCategories();
 
   // Combined mapped categories for this organization
   const mappedCategories = useMemo(() => {
@@ -143,7 +112,7 @@ export function SubcategoryList() {
     data: subcategories,
     isLoading: subcategoriesLoading,
     error,
-  } = useSubcategories(activeOrgId);
+  } = useSubcategories();
 
   // Mutations
   const createMutation = useCreateSubcategory();
@@ -226,10 +195,6 @@ export function SubcategoryList() {
       setFormError('Subcategory name is required.');
       return;
     }
-    if (!activeOrgId) {
-      setFormError('No organization selected.');
-      return;
-    }
 
     try {
       const generatedSlug = formSlug.trim()
@@ -240,7 +205,6 @@ export function SubcategoryList() {
         await updateMutation.mutateAsync({
           id: editingSubcategory.id,
           data: {
-            organization_id: activeOrgId,
             category_id: formCategoryId,
             name: formName.trim(),
             slug: generatedSlug,
@@ -251,7 +215,6 @@ export function SubcategoryList() {
         });
       } else {
         await createMutation.mutateAsync({
-          organization_id: activeOrgId,
           category_id: formCategoryId,
           name: formName.trim(),
           slug: generatedSlug,
@@ -344,18 +307,6 @@ export function SubcategoryList() {
         </div>
 
         <Group gap="sm">
-          {/* Organization Switcher */}
-          {organizations && organizations.length > 1 && (
-            <Select
-              placeholder="Organization"
-              leftSection={<IconBuildingSkyscraper size={16} />}
-              data={organizations.map((o) => ({ value: o.id, label: o.name }))}
-              value={activeOrgId}
-              onChange={(val) => setSelectedOrgId(val || '')}
-              w={210}
-            />
-          )}
-
           <Button
             leftSection={<IconPlus size={16} />}
             onClick={handleOpenCreateModal}
@@ -499,7 +450,7 @@ export function SubcategoryList() {
         </Group>
 
         {/* Loading / Error States */}
-        {subcategoriesLoading || orgsLoading ? (
+        {subcategoriesLoading ? (
           <Center h={240}>
             <Group gap="md">
               <Loader size="md" color="brand" />
@@ -525,7 +476,7 @@ export function SubcategoryList() {
             <Text size="sm" c="dimmed" mt={4} mb="md" maw={400} ta="center">
               {searchQuery || selectedCategoryId !== 'all' || statusFilter !== 'all'
                 ? 'Try clearing active filters to see all organizational subcategories.'
-                : `Create custom subcategories under platform categories for ${activeOrg?.name || 'your organization'}.`}
+                : 'Create custom subcategories under platform categories for your organization.'}
             </Text>
             <Button
               leftSection={<IconPlus size={16} />}

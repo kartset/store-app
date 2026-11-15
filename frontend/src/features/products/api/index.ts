@@ -68,7 +68,6 @@ export function useOrganizationCategories(organizationId?: string) {
       });
       return response.data;
     },
-    enabled: Boolean(organizationId),
   });
 }
 
@@ -157,7 +156,6 @@ export function useBrands(organizationId?: string) {
       });
       return response.data;
     },
-    enabled: !!organizationId,
   });
 }
 

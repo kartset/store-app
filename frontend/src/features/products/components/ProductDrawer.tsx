@@ -43,7 +43,6 @@ import {
   useCreateSubcategory,
   lookupGlobalCatalogue,
 } from '../api';
-import { useOrganizations } from '../../organizations/api';
 import type { CatalogueItem, CreateProductPayload, Product, UnitOfMeasure } from '../types';
 
 
@@ -51,7 +50,6 @@ interface ProductDrawerProps {
   opened: boolean;
   onClose: () => void;
   product: Product | null;
-  defaultOrgId?: string;
   isReadOnly?: boolean;
 }
 
@@ -70,25 +68,17 @@ const TAX_SLABS = [0, 5, 12, 18, 28];
 
 interface ProductDrawerFormProps {
   product: Product | null;
-  defaultOrgId?: string;
-  organizations?: { id: string; name: string }[];
   isReadOnly?: boolean;
   onClose: () => void;
 }
 
 function ProductDrawerForm({
   product,
-  defaultOrgId,
-  organizations,
   isReadOnly = false,
   onClose,
 }: ProductDrawerFormProps) {
-  const [selectedOrgId, setSelectedOrgId] = useState<string>(
-    product?.organization_id || defaultOrgId || organizations?.[0]?.id || ''
-  );
-
-  const { data: orgCategories, isLoading: orgCatsLoading } = useOrganizationCategories(selectedOrgId || undefined);
-  const { data: platformCategories, isLoading: platformCatsLoading } = useCategories(undefined, selectedOrgId || undefined);
+  const { data: orgCategories, isLoading: orgCatsLoading } = useOrganizationCategories();
+  const { data: platformCategories, isLoading: platformCatsLoading } = useCategories();
 
   const mappedCategories = useMemo(() => {
     if (orgCategories && orgCategories.length > 0) {
@@ -110,7 +100,7 @@ function ProductDrawerForm({
     return [];
   }, [orgCategories, platformCategories]);
 
-  const { data: brands } = useBrands(selectedOrgId || undefined);
+  const { data: brands } = useBrands();
 
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
@@ -136,9 +126,9 @@ function ProductDrawerForm({
   const [isReturnable, setIsReturnable] = useState(product?.is_returnable ?? true);
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
 
-  // Subcategories query scoped to selected org and category
+  // Subcategories query scoped to category
   const { data: subcategories } = useSubcategories(
-    selectedOrgId && categoryId ? { organization_id: selectedOrgId, category_id: categoryId } : undefined
+    categoryId ? { category_id: categoryId } : undefined
   );
 
   // Inline Subcategory Creation Modal State
@@ -230,14 +220,13 @@ function ProductDrawerForm({
   const handleCreateSubcategory = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubError(null);
-    if (!newSubName.trim() || !selectedOrgId || !categoryId) {
+    if (!newSubName.trim() || !categoryId) {
       setSubError('Subcategory name is required.');
       return;
     }
 
     try {
       const created = await createSubMutation.mutateAsync({
-        organization_id: selectedOrgId,
         category_id: categoryId,
         name: newSubName.trim(),
         slug: newSubSlug.trim() || undefined,
@@ -293,10 +282,6 @@ function ProductDrawerForm({
     if (isReadOnly) return;
     setErrorMessage(null);
 
-    if (!selectedOrgId) {
-      setErrorMessage('Please select an organization.');
-      return;
-    }
     if (!name.trim()) {
       setErrorMessage('Product Name is required.');
       return;
@@ -307,7 +292,6 @@ function ProductDrawerForm({
     }
 
     const payload: CreateProductPayload = {
-      organization_id: selectedOrgId,
       catalogue_item_id: globalCatalogueMatch?.id || product?.catalogue_item_id || null,
       category_id: categoryId || null,
 
@@ -366,17 +350,6 @@ function ProductDrawerForm({
             {errorMessage}
           </Alert>
         )}
-
-        {/* Organization Selection */}
-        <Select
-          label="Organization Tenant"
-          placeholder="Select owning organization"
-          required
-          data={organizations?.map((o) => ({ value: o.id, label: o.name })) || []}
-          value={selectedOrgId}
-          onChange={(val) => setSelectedOrgId(val || '')}
-          disabled={!!product || isReadOnly}
-        />
 
         {/* Basic Identifiers */}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
@@ -832,11 +805,8 @@ export function ProductDrawer({
   opened,
   onClose,
   product,
-  defaultOrgId,
   isReadOnly = false,
 }: ProductDrawerProps) {
-  const { data: organizations } = useOrganizations();
-
   return (
     <Drawer
       opened={opened}
@@ -875,8 +845,6 @@ export function ProductDrawer({
         <ProductDrawerForm
           key={product?.id || 'new'}
           product={product}
-          defaultOrgId={defaultOrgId}
-          organizations={organizations}
           isReadOnly={isReadOnly}
           onClose={onClose}
         />
