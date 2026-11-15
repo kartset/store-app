@@ -49,7 +49,7 @@ export interface Subcategory {
 }
 
 export interface CreateSubcategoryPayload {
-  organization_id: string;
+  organization_id?: string;
   category_id: string;
   name: string;
   slug?: string | null;
@@ -97,7 +97,7 @@ export interface Product {
 }
 
 export interface CreateProductPayload {
-  organization_id: string;
+  organization_id?: string;
   catalogue_item_id?: string | null;
   category_id?: string | null;
 
@@ -138,7 +138,7 @@ export interface CatalogueItem {
 }
 
 export interface AdoptCataloguePayload {
-  organization_id: string;
+  organization_id?: string;
   cost_price?: number | string;
   base_mrp?: number | string;
   sku?: string;
@@ -158,7 +158,7 @@ export interface AdoptCataloguePayload {
 }
 
 export interface BulkAdoptCataloguePayload {
-  organization_id: string;
+  organization_id?: string;
   catalogue_item_ids: string[];
   category_id?: string | null;
   store_id?: string | null;

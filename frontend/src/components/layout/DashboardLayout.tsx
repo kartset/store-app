@@ -532,27 +532,29 @@ export function DashboardLayout() {
               }}
             />
 
-            <NavLink
-              label="Stores"
-              description="Retail branches & registers"
-              leftSection={
-                <ThemeIcon
-                  size={28}
-                  radius="md"
-                  color={location.pathname === '/stores' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/stores' ? 'filled' : 'light'}
-                >
-                  <IconBuildingStore size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/stores')}
-              active={location.pathname === '/stores'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
+            {isOrgAdmin && (
+              <NavLink
+                label="Stores"
+                description="Retail branches & registers"
+                leftSection={
+                  <ThemeIcon
+                    size={28}
+                    radius="md"
+                    color={location.pathname === '/stores' ? 'brand' : 'gray'}
+                    variant={location.pathname === '/stores' ? 'filled' : 'light'}
+                  >
+                    <IconBuildingStore size={16} />
+                  </ThemeIcon>
+                }
+                onClick={() => navigate('/stores')}
+                active={location.pathname === '/stores'}
+                style={{
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                }}
+              />
+            )}
 
             {isOrgAdmin && (
               <NavLink

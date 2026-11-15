@@ -33,7 +33,6 @@ import {
   IconTrendingUp,
   IconCopy,
   IconCheck,
-  IconBuildingSkyscraper,
   IconEye,
   IconCategory,
   IconWorld,
@@ -47,7 +46,6 @@ import {
   useSubcategories,
   useDeleteProduct,
 } from '../api';
-import { useOrganizations } from '../../organizations/api';
 import { ProductDrawer } from './ProductDrawer';
 import { BarcodeStickerModal } from './BarcodeStickerModal';
 import { AdoptCatalogueModal } from './AdoptCatalogueModal';
@@ -55,9 +53,6 @@ import type { Product } from '../types';
 
 
 export function ProductList() {
-  const { data: organizations } = useOrganizations();
-  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
-
   // Read authenticated user & active store role from localStorage
   const user = useMemo(() => {
     try {
@@ -85,14 +80,6 @@ export function ProductList() {
     return false;
   }, [user, currentStore]);
 
-  // Default to user's current store organization or first org
-  const activeOrgId = useMemo(() => {
-    if (selectedOrgId) return selectedOrgId;
-    if (currentStore?.organization_id) return currentStore.organization_id;
-    if (user?.organizations?.[0]?.id) return user.organizations[0].id;
-    return organizations?.[0]?.id || '';
-  }, [selectedOrgId, currentStore, user, organizations]);
-
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [subcategoryFilter, setSubcategoryFilter] = useState<string | null>(null);
@@ -100,14 +87,12 @@ export function ProductList() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   // Fetch products, categories, subcategories, brands
-  const { data: products, isLoading, error } = useProducts({
-    organization_id: activeOrgId || undefined,
-  });
+  const { data: products, isLoading, error } = useProducts();
   const { data: categories } = useCategories();
   const { data: subcategories } = useSubcategories(
-    activeOrgId ? { organization_id: activeOrgId, category_id: categoryFilter || undefined } : undefined
+    categoryFilter ? { category_id: categoryFilter } : undefined
   );
-  const { data: brands } = useBrands(activeOrgId || undefined);
+  const { data: brands } = useBrands();
   const deleteMutation = useDeleteProduct();
 
   // Modals state
@@ -185,8 +170,6 @@ export function ProductList() {
     return { total, active, avgMargin, categoriesCount: uniqueCats };
   }, [products]);
 
-  const activeOrg = organizations?.find((o) => o.id === activeOrgId);
-
   return (
     <Box>
       {/* Page Header */}
@@ -215,18 +198,6 @@ export function ProductList() {
         </div>
 
         <Group gap="sm">
-          {/* Organization Tenant Switcher (Only if user is Org Admin and multiple orgs exist) */}
-          {organizations && organizations.length > 1 && isOrgAdmin && (
-            <Select
-              placeholder="Organization"
-              leftSection={<IconBuildingSkyscraper size={16} />}
-              data={organizations.map((o) => ({ value: o.id, label: o.name }))}
-              value={activeOrgId}
-              onChange={(val) => setSelectedOrgId(val || '')}
-              w={200}
-            />
-          )}
-
           {isOrgAdmin ? (
             <Group gap="xs">
               <Button
@@ -775,7 +746,6 @@ export function ProductList() {
         opened={drawerOpened}
         onClose={() => setDrawerOpened(false)}
         product={editingProduct}
-        defaultOrgId={activeOrgId}
         isReadOnly={!isOrgAdmin}
       />
 
@@ -783,7 +753,6 @@ export function ProductList() {
       <AdoptCatalogueModal
         opened={adoptModalOpened}
         onClose={() => setAdoptModalOpened(false)}
-        organizationId={activeOrgId}
         storeId={currentStore?.id}
       />
 
@@ -797,7 +766,7 @@ export function ProductList() {
             setStickerProduct(null);
           }}
           product={stickerProduct}
-          storeName={activeOrg?.name || 'RETAIL STORE'}
+          storeName={currentStore?.name || 'RETAIL STORE'}
         />
       )}
     </Box>

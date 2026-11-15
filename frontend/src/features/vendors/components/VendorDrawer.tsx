@@ -28,7 +28,6 @@ import {
 } from '@tabler/icons-react';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useOrganizations } from '../../organizations/api';
 import { useCreateVendor, useUpdateVendor } from '../api';
 import {
   GST_STATE_CODE_MAP,
@@ -41,7 +40,6 @@ interface VendorDrawerProps {
   opened: boolean;
   onClose: () => void;
   vendor: Vendor | null;
-  defaultOrgId?: string;
   isReadOnly?: boolean;
 }
 
@@ -52,14 +50,8 @@ export function VendorDrawer({
   opened,
   onClose,
   vendor,
-  defaultOrgId,
   isReadOnly = false,
 }: VendorDrawerProps) {
-  const { data: organizations } = useOrganizations();
-
-  // Selected organization
-  const [organizationId, setOrganizationId] = useState<string>('');
-
   // Basic Information
   const [name, setName] = useState('');
   const [tradeName, setTradeName] = useState('');
@@ -103,7 +95,6 @@ export function VendorDrawer({
   // Initialize form when vendor changes or drawer opens
   useEffect(() => {
     if (vendor) {
-      setOrganizationId(vendor.organization_id || '');
       setName(vendor.name || '');
       setTradeName(vendor.trade_name || '');
       setVendorCode(vendor.vendor_code || '');
@@ -126,7 +117,6 @@ export function VendorDrawer({
       setIsActive(vendor.is_active ?? true);
       setErrorMessage(null);
     } else {
-      setOrganizationId(defaultOrgId || (organizations?.[0]?.id ?? ''));
       setName('');
       setTradeName('');
       setVendorCode('');
@@ -149,7 +139,7 @@ export function VendorDrawer({
       setIsActive(true);
       setErrorMessage(null);
     }
-  }, [vendor, defaultOrgId, organizations, opened]);
+  }, [vendor, opened]);
 
   // Real-time GSTIN format validation & auto-derivation
   const gstinStatus = useMemo(() => {
@@ -194,23 +184,10 @@ export function VendorDrawer({
     }
   };
 
-  const orgSelectData = useMemo(() => {
-    return (
-      organizations?.map((org) => ({
-        value: org.id,
-        label: org.name,
-      })) || []
-    );
-  }, [organizations]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!organizationId) {
-      setErrorMessage('Please select an organization.');
-      return;
-    }
     if (!name.trim()) {
       setErrorMessage('Vendor Legal Name is required.');
       return;
@@ -227,7 +204,6 @@ export function VendorDrawer({
     }
 
     const payload = {
-      organization_id: organizationId,
       name: name.trim(),
       trade_name: tradeName.trim() || undefined,
       vendor_code: vendorCode.trim() || undefined,
@@ -335,16 +311,6 @@ export function VendorDrawer({
             </Group>
 
             <Stack gap="sm">
-              <Select
-                label="Organization"
-                placeholder="Select parent organization"
-                data={orgSelectData}
-                value={organizationId}
-                onChange={(val) => setOrganizationId(val || '')}
-                required
-                disabled={isReadOnly || Boolean(vendor)}
-              />
-
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
                 <TextInput
                   label="Legal Business Name"

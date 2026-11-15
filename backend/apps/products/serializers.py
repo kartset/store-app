@@ -7,6 +7,7 @@ from db.models import (
     Brand,
     CatalogueItem,
     Category,
+    Organization,
     OrganizationCategory,
     Product,
     StoreCategory,
@@ -14,6 +15,7 @@ from db.models import (
     UnitOfMeasure,
 )
 from utils.serializers import BaseModelSerializer
+from utils.tenant import get_user_organization
 
 
 class CategorySerializer(BaseModelSerializer):
@@ -63,6 +65,12 @@ class CategoryTreeSerializer(CategorySerializer):
 
 class BrandSerializer(BaseModelSerializer):
     """Serializer for Organization Brands."""
+    organization_id = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.filter(is_deleted=False),
+        required=False,
+        allow_null=True
+    )
+
     class Meta:
         model = Brand
         fields = (
@@ -77,9 +85,14 @@ class BrandSerializer(BaseModelSerializer):
             'logo_url',
             'is_active',
         )
+        validators = []
 
     def validate(self, attrs):
-        org = attrs.get('organization_id') or (self.instance.organization_id if self.instance else None)
+        request = self.context.get('request')
+        user_org = get_user_organization(request.user) if request and request.user else None
+        org = attrs.get('organization_id') or user_org or (self.instance.organization_id if self.instance else None)
+        if not attrs.get('organization_id') and user_org:
+            attrs['organization_id'] = user_org
         name = attrs.get('name') or (self.instance.name if self.instance else None)
         if org and name:
             qs = Brand.objects.filter(organization_id=org, name__iexact=name.strip(), is_deleted=False)
@@ -93,6 +106,11 @@ class BrandSerializer(BaseModelSerializer):
 class OrganizationCategorySerializer(BaseModelSerializer):
     """Serializer for Categories adopted by an Organization."""
     category = CategorySerializer(source='category_id', read_only=True)
+    organization_id = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.filter(is_deleted=False),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = OrganizationCategory
@@ -106,6 +124,7 @@ class OrganizationCategorySerializer(BaseModelSerializer):
             'category',
             'is_active',
         )
+        validators = []
 
 
 class StoreCategorySerializer(BaseModelSerializer):
@@ -130,6 +149,11 @@ class SubcategorySerializer(BaseModelSerializer):
     """Serializer for Organization-specific Subcategories."""
     category = CategorySerializer(source='category_id', read_only=True)
     organization = OrganizationSerializer(source='organization_id', read_only=True)
+    organization_id = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.filter(is_deleted=False),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = Subcategory
@@ -149,9 +173,14 @@ class SubcategorySerializer(BaseModelSerializer):
             'is_active',
             'display_order',
         )
+        validators = []
 
     def validate(self, attrs):
-        org = attrs.get('organization_id') or (self.instance.organization_id if self.instance else None)
+        request = self.context.get('request')
+        user_org = get_user_organization(request.user) if request and request.user else None
+        org = attrs.get('organization_id') or user_org or (self.instance.organization_id if self.instance else None)
+        if not attrs.get('organization_id') and user_org:
+            attrs['organization_id'] = user_org
         category = attrs.get('category_id') or (self.instance.category_id if self.instance else None)
         name = attrs.get('name') or (self.instance.name if self.instance else None)
 
@@ -180,6 +209,11 @@ class ProductSerializer(BaseModelSerializer):
     subcategory = SubcategorySerializer(source='subcategory_id', read_only=True)
     brand = BrandSerializer(source='brand_id', read_only=True)
     organization = OrganizationSerializer(source='organization_id', read_only=True)
+    organization_id = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.filter(is_deleted=False),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = Product
@@ -214,6 +248,7 @@ class ProductSerializer(BaseModelSerializer):
             'is_active',
             'low_stock_threshold',
         )
+        validators = []
 
     def validate_sku(self, value):
         if not value or not value.strip():
@@ -254,7 +289,11 @@ class ProductSerializer(BaseModelSerializer):
         return value
 
     def validate(self, attrs):
-        org = attrs.get('organization_id') or (self.instance.organization_id if self.instance else None)
+        request = self.context.get('request')
+        user_org = get_user_organization(request.user) if request and request.user else None
+        org = attrs.get('organization_id') or user_org or (self.instance.organization_id if self.instance else None)
+        if not attrs.get('organization_id') and user_org:
+            attrs['organization_id'] = user_org
         sku = attrs.get('sku') or (self.instance.sku if self.instance else None)
         barcode = attrs.get('barcode', self.instance.barcode if self.instance else None)
         internal_barcode = attrs.get('internal_barcode', self.instance.internal_barcode if self.instance else None)
@@ -289,13 +328,13 @@ class ProductSerializer(BaseModelSerializer):
         if subcategory and org:
             sub_org_id = subcategory.organization_id_id if hasattr(subcategory, 'organization_id_id') else subcategory.organization_id.id
             target_org_id = org.id if hasattr(org, 'id') else org
-            if sub_org_id != target_org_id:
+            if str(sub_org_id) != str(target_org_id):
                 raise serializers.ValidationError({'subcategory_id': 'Selected subcategory does not belong to this organization.'})
 
         if subcategory and category:
             sub_cat_id = subcategory.category_id_id if hasattr(subcategory, 'category_id_id') else subcategory.category_id.id
             target_cat_id = category.id if hasattr(category, 'id') else category
-            if sub_cat_id != target_cat_id:
+            if str(sub_cat_id) != str(target_cat_id):
                 raise serializers.ValidationError({'subcategory_id': 'Selected subcategory does not belong to the selected category.'})
 
         # Auto-link to Global Product Register (CatalogueItem) by manufacturer barcode if not explicitly specified

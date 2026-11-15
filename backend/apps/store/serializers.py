@@ -1,10 +1,14 @@
 from rest_framework import serializers
 from utils.serializers import BaseModelSerializer
 from apps.organisation.serializers import OrganizationSerializer
-from db.models import Store
+from db.models import Store, Organization
 
 class StoreSerializer(BaseModelSerializer):
     organization = OrganizationSerializer(source='organization_id', read_only=True)
+    organization_id = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.filter(is_deleted=False),
+        required=False
+    )
     class Meta:
         model = Store
         fields = (

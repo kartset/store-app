@@ -48,7 +48,7 @@ import type { CatalogueItem, AdoptCataloguePayload } from '../types';
 interface AdoptCatalogueModalProps {
   opened: boolean;
   onClose: () => void;
-  organizationId: string;
+  organizationId?: string;
   storeId?: string;
   onSuccess?: () => void;
 }
@@ -85,10 +85,10 @@ export function AdoptCatalogueModal({
   });
 
   const { data: platformCategories } = useCategories();
-  const { data: orgCategories } = useOrganizationCategories(organizationId);
-  const { data: brands } = useBrands(organizationId);
+  const { data: orgCategories } = useOrganizationCategories();
+  const { data: brands } = useBrands();
   const { data: subcategories } = useSubcategories(
-    organizationId ? { organization_id: organizationId, category_id: categoryId || undefined } : undefined
+    categoryId ? { category_id: categoryId } : undefined
   );
 
 
@@ -161,12 +161,12 @@ export function AdoptCatalogueModal({
 
   // Submit Adoption
   const handleAdopt = async () => {
-    if (!selectedItem || !organizationId) return;
+    if (!selectedItem) return;
     setAdoptErrorMsg(null);
     setAdoptSuccessMsg(null);
 
     const payload: AdoptCataloguePayload = {
-      organization_id: organizationId,
+      ...(organizationId ? { organization_id: organizationId } : {}),
       cost_price: costPrice,
       base_mrp: baseMrp,
       category_id: categoryId || null,

@@ -5,7 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from db.models import Organization, Product, User, Vendor, VendorProduct
+from db.models import Organization, OrganizationStaff, Product, User, Vendor, VendorProduct
 
 
 class VendorAPITests(TestCase):
@@ -249,6 +249,45 @@ class VendorAPITests(TestCase):
         results = self._extract_results(list_res.data)
         vendor_ids = [v['id'] for v in results]
         self.assertNotIn(str(vendor.id), vendor_ids)
+
+    def test_vendor_server_side_tenant_derivation(self):
+        """
+        Verify tenant organization is derived server-side from request.user (JWT)
+        when organization_id is omitted from payloads and query params.
+        """
+        OrganizationStaff.objects.create(
+            user_id=self.user,
+            organization_id=self.org1,
+            role='ORG_ADMIN',
+            is_active=True,
+        )
+
+        # Create an org2 vendor to ensure isolation
+        Vendor.objects.create(
+            organization_id=self.org2,
+            name='Org2 Isolated Vendor',
+            vendor_code='V-ORG2-ISO',
+            created_by=self.user
+        )
+
+        # 1. Create Vendor without organization_id in payload
+        url = reverse('vendor-list')
+        payload = {
+            'name': 'Auto Scoped Vendor',
+            'vendor_code': 'V-AUTO-01',
+            'payment_terms': 'NET_30',
+        }
+        res = self.client.post(url, payload, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(str(res.data['organization_id']), str(self.org1.id))
+
+        # 2. List Vendors without organization_id in query params
+        list_res = self.client.get(url)
+        self.assertEqual(list_res.status_code, status.HTTP_200_OK)
+        results = self._extract_results(list_res.data)
+        names = [v['name'] for v in results]
+        self.assertIn('Auto Scoped Vendor', names)
+        self.assertNotIn('Org2 Isolated Vendor', names)
 
 
 class VendorProductAPITests(TestCase):

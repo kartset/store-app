@@ -20,6 +20,8 @@ from db.models import (
     Subcategory,
 )
 
+from utils.tenant import get_user_organization
+
 from .permissions import IsOrgAdminOrReadOnly
 from .serializers import (
     BrandSerializer,
@@ -103,13 +105,23 @@ class OrganizationCategoryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        org_id = self.request.query_params.get('organization_id')
-        if org_id:
-            qs = qs.filter(organization_id_id=org_id)
+        user_org = get_user_organization(self.request.user)
+        if user_org:
+            qs = qs.filter(organization_id=user_org)
+        elif not getattr(self.request.user, 'is_superuser', False):
+            return qs.none()
+        else:
+            org_id = self.request.query_params.get('organization_id')
+            if org_id:
+                qs = qs.filter(organization_id_id=org_id)
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user_org = get_user_organization(self.request.user)
+        if user_org and 'organization_id' not in serializer.validated_data:
+            serializer.save(created_by=self.request.user, organization_id=user_org)
+        else:
+            serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
@@ -123,7 +135,8 @@ class OrganizationCategoryViewSet(viewsets.ModelViewSet):
         Bulk adopts a list of categories for an organization.
         Payload: {"organization_id": "uuid", "category_ids": ["uuid1", "uuid2"]}
         """
-        org_id = request.data.get('organization_id')
+        user_org = get_user_organization(request.user)
+        org_id = request.data.get('organization_id') or (user_org.id if user_org else None)
         category_ids = request.data.get('category_ids', [])
 
         if not org_id:
@@ -231,17 +244,27 @@ class BrandViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        org_id = self.request.query_params.get('organization_id')
-        search = self.request.query_params.get('search')
+        user_org = get_user_organization(self.request.user)
+        if user_org:
+            qs = qs.filter(organization_id=user_org)
+        elif not getattr(self.request.user, 'is_superuser', False):
+            return qs.none()
+        else:
+            org_id = self.request.query_params.get('organization_id')
+            if org_id:
+                qs = qs.filter(organization_id_id=org_id)
 
-        if org_id:
-            qs = qs.filter(organization_id_id=org_id)
+        search = self.request.query_params.get('search')
         if search:
             qs = qs.filter(name__icontains=search)
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user_org = get_user_organization(self.request.user)
+        if user_org and 'organization_id' not in serializer.validated_data:
+            serializer.save(created_by=self.request.user, organization_id=user_org)
+        else:
+            serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
@@ -261,13 +284,20 @@ class SubcategoryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        org_id = self.request.query_params.get('organization_id')
+        user_org = get_user_organization(self.request.user)
+        if user_org:
+            qs = qs.filter(organization_id=user_org)
+        elif not getattr(self.request.user, 'is_superuser', False):
+            return qs.none()
+        else:
+            org_id = self.request.query_params.get('organization_id')
+            if org_id:
+                qs = qs.filter(organization_id_id=org_id)
+
         category_id = self.request.query_params.get('category_id')
         is_active = self.request.query_params.get('is_active')
         search = self.request.query_params.get('search')
 
-        if org_id:
-            qs = qs.filter(organization_id_id=org_id)
         if category_id:
             qs = qs.filter(category_id_id=category_id)
         if is_active is not None:
@@ -277,7 +307,11 @@ class SubcategoryViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user_org = get_user_organization(self.request.user)
+        if user_org and 'organization_id' not in serializer.validated_data:
+            serializer.save(created_by=self.request.user, organization_id=user_org)
+        else:
+            serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
@@ -297,15 +331,22 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        org_id = self.request.query_params.get('organization_id')
+        user_org = get_user_organization(self.request.user)
+        if user_org:
+            qs = qs.filter(organization_id=user_org)
+        elif not getattr(self.request.user, 'is_superuser', False):
+            return qs.none()
+        else:
+            org_id = self.request.query_params.get('organization_id')
+            if org_id:
+                qs = qs.filter(organization_id_id=org_id)
+
         category_id = self.request.query_params.get('category_id')
         subcategory_id = self.request.query_params.get('subcategory_id')
         brand_id = self.request.query_params.get('brand_id')
         is_active = self.request.query_params.get('is_active')
         search = self.request.query_params.get('search')
 
-        if org_id:
-            qs = qs.filter(organization_id_id=org_id)
         if category_id:
             qs = qs.filter(category_id_id=category_id)
         if subcategory_id:
@@ -326,7 +367,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user_org = get_user_organization(self.request.user)
+        if user_org and 'organization_id' not in serializer.validated_data:
+            serializer.save(created_by=self.request.user, organization_id=user_org)
+        else:
+            serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
@@ -347,12 +392,21 @@ class BarcodeLookupView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, code_or_sku):
-        org_id = request.query_params.get('organization_id')
+        user_org = get_user_organization(request.user)
         code = code_or_sku.strip()
 
         qs = Product.objects.filter(is_deleted=False).select_related('category_id', 'brand_id', 'organization_id')
-        if org_id:
-            qs = qs.filter(organization_id_id=org_id)
+        if user_org:
+            qs = qs.filter(organization_id=user_org)
+        elif not getattr(request.user, 'is_superuser', False):
+            return Response(
+                {'detail': f"Product not found for barcode or SKU: '{code}'"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        else:
+            org_id = request.query_params.get('organization_id')
+            if org_id:
+                qs = qs.filter(organization_id_id=org_id)
 
         product = qs.filter(
             Q(barcode__iexact=code) | Q(internal_barcode__iexact=code) | Q(sku__iexact=code)
@@ -365,4 +419,5 @@ class BarcodeLookupView(APIView):
             )
 
         serializer = ProductSerializer(product)
+        return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.data, status=status.HTTP_200_OK)
