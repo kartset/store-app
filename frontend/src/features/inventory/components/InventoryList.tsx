@@ -35,7 +35,8 @@ import {
   IconPlus,
 } from '@tabler/icons-react';
 import { useState, useMemo } from 'react';
-import { useInventory, useInventorySummary } from '../api';
+import { usePaginatedInventory, useInventorySummary } from '../api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import { useStores } from '../../stores/api';
 import { useOrganizations } from '../../organizations/api';
 import { StockAdjustmentModal } from './StockAdjustmentModal';
@@ -73,6 +74,8 @@ export function InventoryList() {
   }, [activeStore, organizations]);
 
   // Filters
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(5);
   const [search, setSearch] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'LOW_STOCK' | 'OUT_OF_STOCK'>('ALL');
 
@@ -84,12 +87,15 @@ export function InventoryList() {
   const [movementTargetProduct, setMovementTargetProduct] = useState<{ id: string; name: string } | undefined>(undefined);
 
   // Queries
-  const { data: inventory, isLoading } = useInventory({
+  const { data: paginatedData, isLoading } = usePaginatedInventory({
+    page,
+    page_size: pageSize,
     store_id: activeStoreId || undefined,
     is_low_stock: statusFilter === 'LOW_STOCK' ? true : undefined,
     is_out_of_stock: statusFilter === 'OUT_OF_STOCK' ? true : undefined,
     search: search.trim() || undefined,
   });
+  const inventory = paginatedData?.results || [];
 
   const { data: summary } = useInventorySummary(activeStoreId || undefined);
 
@@ -263,13 +269,19 @@ export function InventoryList() {
             placeholder="Search by product name, SKU, barcode, batch..."
             leftSection={<IconSearch size={16} />}
             value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
+            onChange={(e) => {
+              setSearch(e.currentTarget.value);
+              setPage(1);
+            }}
             style={{ flex: 1, minWidth: 260 }}
           />
 
           <SegmentedControl
             value={statusFilter}
-            onChange={(val) => setStatusFilter(val as any)}
+            onChange={(val) => {
+              setStatusFilter(val as any);
+              setPage(1);
+            }}
             data={[
               { label: 'All Items', value: 'ALL' },
               { label: `Low Stock (${summary?.low_stock_count || 0})`, value: 'LOW_STOCK' },
@@ -455,6 +467,16 @@ export function InventoryList() {
             </Table.Tbody>
           </Table>
         )}
+
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalCount={paginatedData?.count ?? 0}
+          totalPages={paginatedData?.total_pages ?? 1}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          disabled={isLoading}
+        />
       </Card>
 
       {/* Stock Adjustment Modal */}
