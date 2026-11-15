@@ -67,12 +67,27 @@ class StoreScopingAndRBACркаTests(APITestCase):
         self.client.force_authenticate(user=self.org_admin1)
         res = self.client.get("/api/stores/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 2)
+        self.assertEqual(res.data["current_page"], 1)
 
-        store_ids = [s["id"] for s in res.data]
+        store_ids = [s["id"] for s in res.data["results"]]
         self.assertIn(str(self.store1_org1.id), store_ids)
         self.assertIn(str(self.store2_org1.id), store_ids)
         self.assertNotIn(str(self.store1_org2.id), store_ids)
         self.assertEqual(len(store_ids), 2)
+
+    def test_stores_pagination_metadata_and_limits(self):
+        """Verify EnhancedPageNumberPagination returns Option B metadata."""
+        self.client.force_authenticate(user=self.org_admin1)
+        res = self.client.get("/api/stores/?page=1&page_size=1")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 2)
+        self.assertEqual(res.data["total_pages"], 2)
+        self.assertEqual(res.data["current_page"], 1)
+        self.assertEqual(res.data["page_size"], 1)
+        self.assertIsNotNone(res.data["next"])
+        self.assertIsNone(res.data["previous"])
+        self.assertEqual(len(res.data["results"]), 1)
 
     def test_org_admin_create_store_auto_assigns_org(self):
         """Org Admin creating a store without organization_id gets auto-assigned to their org."""
@@ -110,8 +125,9 @@ class StoreScopingAndRBACркаTests(APITestCase):
         self.client.force_authenticate(user=self.store_staff1)
         res = self.client.get("/api/stores/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["count"], 1)
 
-        store_ids = [s["id"] for s in res.data]
+        store_ids = [s["id"] for s in res.data["results"]]
         self.assertEqual(store_ids, [str(self.store1_org1.id)])
 
     def test_store_staff_cannot_create_store(self):
