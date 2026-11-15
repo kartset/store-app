@@ -456,6 +456,7 @@ class OnboardOrganizationSerializer(serializers.Serializer):
     store_name = serializers.CharField(max_length=255, required=False, allow_blank=True, default='Main Flagship Store')
     store_address = serializers.CharField(required=False, allow_blank=True, default='')
     gst_number = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True, min_length=6)
 
     def validate_subdomain(self, value):
         if value:
@@ -488,6 +489,10 @@ class OnboardOrganizationSerializer(serializers.Serializer):
         else:
             attrs['subdomain'] = subdomain.lower()
 
+        password = attrs.get('password')
+        if password and len(password.strip()) < 6:
+            raise serializers.ValidationError({'password': 'Password must be at least 6 characters long.'})
+
         return attrs
 
     def create(self, validated_data):
@@ -500,6 +505,7 @@ class OnboardOrganizationSerializer(serializers.Serializer):
         store_name = (validated_data.get('store_name') or '').strip() or 'Main Flagship Store'
         store_address = (validated_data.get('store_address') or '').strip()
         gst_number = (validated_data.get('gst_number') or '').strip()
+        password = (validated_data.get('password') or '').strip()
 
         with transaction.atomic():
             user = User.objects.filter(email__iexact=email, is_deleted=False).first()
@@ -523,6 +529,10 @@ class OnboardOrganizationSerializer(serializers.Serializer):
                     updated = True
                 if updated:
                     user.save()
+
+            if password:
+                user.set_password(password)
+                user.save()
 
             organization = Organization.objects.create(
                 name=org_name,

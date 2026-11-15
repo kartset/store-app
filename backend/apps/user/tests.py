@@ -395,4 +395,43 @@ class GoogleAuthAndOnboardingTests(TestCase):
         self.assertEqual(res.data['user']['email'], 'existing@brand.com')
         self.assertTrue(res.data['user']['is_org_admin'])
 
+    def test_onboarding_with_password_allows_subsequent_email_login(self):
+        """Owner who provides a password during onboarding can subsequently log in using email/password."""
+        owner_email = 'founder.pwd@apex.com'
+        owner_pass = 'StrongOwnerP@ss123'
+
+        onboard_res = self.client.post(
+            self.onboard_url,
+            {
+                'id_token': f'mock:{owner_email}:Leo:Vance',
+                'organization_name': 'Vance Retail Group',
+                'subdomain': 'vance-retail',
+                'store_name': 'Vance Central',
+                'password': owner_pass,
+            },
+            format='json',
+        )
+        self.assertEqual(onboard_res.status_code, status.HTTP_201_CREATED)
+
+        user = User.objects.get(email=owner_email)
+        self.assertTrue(user.check_password(owner_pass))
+
+        # Test subsequent email + password login to /api/users/auth/login/
+        login_url = reverse('token_obtain_pair')
+        login_res = self.client.post(
+            login_url,
+            {
+                'email': owner_email,
+                'password': owner_pass,
+            },
+            format='json',
+        )
+        self.assertEqual(login_res.status_code, status.HTTP_200_OK)
+        self.assertIn('access', login_res.data)
+        self.assertIn('refresh', login_res.data)
+        self.assertEqual(login_res.data['user']['email'], owner_email)
+        self.assertEqual(login_res.data['user']['current_store']['name'], 'Vance Central')
+        self.assertTrue(login_res.data['user']['is_org_admin'])
+
+
 
