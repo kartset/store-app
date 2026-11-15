@@ -5,6 +5,7 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from db.models import Vendor, VendorProduct
+from utils.tenant import get_user_organization
 
 from .serializers import VendorProductSerializer, VendorSerializer
 
@@ -22,14 +23,29 @@ class VendorViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        org_id = self.request.query_params.get('organization_id')
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return qs.none()
+
+        if getattr(user, 'is_superuser', False):
+            org_id = self.request.query_params.get('organization_id')
+            if org_id:
+                qs = qs.filter(organization_id_id=org_id)
+        else:
+            user_org = get_user_organization(user)
+            if user_org:
+                qs = qs.filter(organization_id=user_org)
+            elif self.request.query_params.get('organization_id'):
+                qs = qs.filter(organization_id_id=self.request.query_params.get('organization_id'))
+            elif self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
+                pass
+            else:
+                return qs.none()
+
         is_active = self.request.query_params.get('is_active')
         payment_terms = self.request.query_params.get('payment_terms')
         state_code = self.request.query_params.get('state_code')
         search = self.request.query_params.get('search')
-
-        if org_id:
-            qs = qs.filter(organization_id_id=org_id)
 
         if is_active is not None:
             qs = qs.filter(is_active=is_active.lower() in ('true', '1'))
@@ -56,7 +72,11 @@ class VendorViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user_org = get_user_organization(self.request.user)
+        if user_org and 'organization_id' not in serializer.validated_data:
+            serializer.save(created_by=self.request.user, organization_id=user_org)
+        else:
+            serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(updated_by=self.request.user)
@@ -80,9 +100,27 @@ class VendorProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return qs.none()
+
+        if getattr(user, 'is_superuser', False):
+            org_id = self.request.query_params.get('organization_id')
+            if org_id:
+                qs = qs.filter(vendor_id__organization_id_id=org_id)
+        else:
+            user_org = get_user_organization(user)
+            if user_org:
+                qs = qs.filter(vendor_id__organization_id=user_org)
+            elif self.request.query_params.get('organization_id'):
+                qs = qs.filter(vendor_id__organization_id_id=self.request.query_params.get('organization_id'))
+            elif self.action in ['retrieve', 'update', 'partial_update', 'destroy'] or self.request.query_params.get('vendor_id') or self.request.query_params.get('product_id'):
+                pass
+            else:
+                return qs.none()
+
         vendor_id = self.request.query_params.get('vendor_id')
         product_id = self.request.query_params.get('product_id')
-        org_id = self.request.query_params.get('organization_id')
         is_primary = self.request.query_params.get('is_primary_supplier')
         is_active = self.request.query_params.get('is_active')
         search = self.request.query_params.get('search')
@@ -92,9 +130,6 @@ class VendorProductViewSet(viewsets.ModelViewSet):
 
         if product_id:
             qs = qs.filter(product_id_id=product_id)
-
-        if org_id:
-            qs = qs.filter(vendor_id__organization_id_id=org_id)
 
         if is_primary is not None:
             qs = qs.filter(is_primary_supplier=is_primary.lower() in ('true', '1'))

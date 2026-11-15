@@ -3,8 +3,9 @@ import re
 from rest_framework import serializers
 
 from apps.organisation.serializers import OrganizationSerializer
-from db.models import Vendor, VendorProduct
+from db.models import Organization, Vendor, VendorProduct
 from utils.serializers import BaseModelSerializer
+from utils.tenant import get_user_organization
 
 GSTIN_REGEX = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$')
 PAN_REGEX = re.compile(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$')
@@ -12,6 +13,11 @@ PAN_REGEX = re.compile(r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$')
 
 class VendorSerializer(BaseModelSerializer):
     organization = OrganizationSerializer(source='organization_id', read_only=True)
+    organization_id = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.filter(is_deleted=False),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = Vendor
@@ -49,6 +55,7 @@ class VendorSerializer(BaseModelSerializer):
             'notes',
             'is_active',
         )
+        validators = []
 
     def validate_gstin(self, value):
         if not value:
@@ -77,6 +84,11 @@ class VendorSerializer(BaseModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        request = self.context.get('request')
+        user_org = get_user_organization(request.user) if request and request.user else None
+        org = attrs.get('organization_id') or user_org or (self.instance.organization_id if self.instance else None)
+        if not attrs.get('organization_id') and user_org:
+            attrs['organization_id'] = user_org
 
         gstin = attrs.get('gstin') or (self.instance.gstin if self.instance else None)
         if gstin:
