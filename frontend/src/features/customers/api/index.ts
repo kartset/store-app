@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
+import type { PaginatedResponse } from '../../../types/pagination';
 import type {
   CreateCustomerInput,
   Customer,
@@ -9,16 +10,36 @@ import type {
   UpdateCustomerInput,
 } from '../types';
 
-export function useCustomers(params?: CustomerFilterParams) {
+export function usePaginatedCustomers(params?: CustomerFilterParams) {
   return useQuery({
-    queryKey: ['customers', params],
+    queryKey: ['customers', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.customer_type) queryParams.customer_type = params.customer_type;
       if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
       if (params?.search) queryParams.search = params.search;
 
-      const response = await api.get<Customer[] | { results: Customer[] }>('/api/customers/', {
+      const response = await api.get<PaginatedResponse<Customer>>('/api/customers/', {
+        params: queryParams,
+      });
+      return response.data;
+    },
+  });
+}
+
+export function useCustomers(params?: CustomerFilterParams) {
+  return useQuery({
+    queryKey: ['customers', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = { page_size: '100' };
+      if (params?.customer_type) queryParams.customer_type = params.customer_type;
+      if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<PaginatedResponse<Customer> | Customer[]>('/api/customers/', {
         params: queryParams,
       });
 

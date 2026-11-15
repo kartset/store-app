@@ -1,3 +1,5 @@
+import type { PaginationParams } from '../../types/pagination';
+
 export type PaymentTerms =
   | 'COD'
   | 'PREPAID'
@@ -130,7 +132,7 @@ export interface VendorProductFilterParams {
   search?: string;
 }
 
-export interface VendorFilterParams {
+export interface VendorFilterParams extends PaginationParams {
   organization_id?: string;
   is_active?: boolean;
   payment_terms?: string;

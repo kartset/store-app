@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
+import type { PaginatedResponse } from '../../../types/pagination';
 import type {
   CreateVendorInput,
   CreateVendorProductInput,
@@ -11,18 +12,40 @@ import type {
   VendorProductFilterParams,
 } from '../types';
 
-export function useVendors(params?: VendorFilterParams) {
+export function usePaginatedVendors(params?: VendorFilterParams) {
   return useQuery({
-    queryKey: ['vendors', params],
+    queryKey: ['vendors', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.organization_id) queryParams.organization_id = params.organization_id;
       if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
       if (params?.payment_terms) queryParams.payment_terms = params.payment_terms;
       if (params?.state_code) queryParams.state_code = params.state_code;
       if (params?.search) queryParams.search = params.search;
 
-      const response = await api.get<Vendor[] | { results: Vendor[] }>('/api/vendors/', {
+      const response = await api.get<PaginatedResponse<Vendor>>('/api/vendors/', {
+        params: queryParams,
+      });
+      return response.data;
+    },
+  });
+}
+
+export function useVendors(params?: VendorFilterParams) {
+  return useQuery({
+    queryKey: ['vendors', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = { page_size: '100' };
+      if (params?.organization_id) queryParams.organization_id = params.organization_id;
+      if (params?.is_active !== undefined) queryParams.is_active = String(params.is_active);
+      if (params?.payment_terms) queryParams.payment_terms = params.payment_terms;
+      if (params?.state_code) queryParams.state_code = params.state_code;
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<PaginatedResponse<Vendor> | Vendor[]>('/api/vendors/', {
         params: queryParams,
       });
 
