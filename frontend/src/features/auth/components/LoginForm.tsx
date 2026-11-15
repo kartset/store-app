@@ -10,11 +10,13 @@ import {
   ThemeIcon,
   Alert,
   Badge,
+  Divider,
+  Modal,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { zodResolver } from 'mantine-form-zod-resolver';
 import { z } from 'zod';
-import { useLogin } from '../api/login';
+import { useLogin, useGoogleLogin } from '../api/login';
 import { useNavigate } from 'react-router-dom';
 import {
   IconBuildingStore,
@@ -24,6 +26,8 @@ import {
   IconShieldLock,
   IconArrowRight,
   IconSparkles,
+  IconBrandGoogle,
+  IconExternalLink,
 } from '@tabler/icons-react';
 import { useState } from 'react';
 
@@ -34,8 +38,50 @@ const schema = z.object({
 
 export function LoginForm() {
   const loginMutation = useLogin();
+  const googleMutation = useGoogleLogin();
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const [googleModalOpen, setGoogleModalOpen] = useState(false);
+  const [googleToken, setGoogleToken] = useState('mock:founder@apexretail.com:Alex:Rivera');
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleUnregistered, setGoogleUnregistered] = useState(false);
+
+  const handleGoogleSubmit = (tokenToUse?: string) => {
+    const token = tokenToUse || googleToken;
+    if (!token.trim()) {
+      setGoogleError('Please enter a Google ID token or select Demo Owner.');
+      return;
+    }
+    setGoogleError(null);
+    setGoogleUnregistered(false);
+    googleMutation.mutate(token.trim(), {
+      onSuccess: (data: any) => {
+        if (data.registered && data.access) {
+          localStorage.setItem('access_token', data.access);
+          localStorage.setItem('refresh_token', data.refresh);
+          if (data.user) {
+            localStorage.setItem('user', JSON.stringify(data.user));
+            if (data.user.current_store) {
+              localStorage.setItem('current_store', JSON.stringify(data.user.current_store));
+            }
+          }
+          setGoogleModalOpen(false);
+          navigate('/');
+        } else {
+          setGoogleUnregistered(true);
+          setGoogleError(data.message || 'No active organization found for this Google account.');
+        }
+      },
+      onError: (err: any) => {
+        setGoogleError(
+          err?.response?.data?.id_token?.[0] ||
+          err?.response?.data?.detail ||
+          'Google authentication failed.'
+        );
+      },
+    });
+  };
 
   const form = useForm({
     initialValues: { email: '', password: '' },
@@ -265,8 +311,34 @@ export function LoginForm() {
               >
                 Sign In to Store
               </Button>
+
+              <Divider label="or continue with" labelPosition="center" my="xs" />
+
+              <Button
+                type="button"
+                variant="default"
+                fullWidth
+                size="md"
+                leftSection={<IconBrandGoogle size={18} color="#EA4335" />}
+                onClick={() => setGoogleModalOpen(true)}
+              >
+                Sign In with Google
+              </Button>
             </Stack>
           </form>
+
+          {/* Register Organization CTA link */}
+          <Box mt="md" style={{ textAlign: 'center' }}>
+            <Text size="xs" c="dimmed">
+              New organization owner?{' '}
+              <a
+                href="http://localhost:3000/onboard"
+                style={{ color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
+              >
+                Register & Onboard on Website ↗
+              </a>
+            </Text>
+          </Box>
 
           {/* Security & Access Info Card */}
           <Box
@@ -294,6 +366,74 @@ export function LoginForm() {
           </Box>
         </Box>
       </Box>
+
+      {/* Google Sign-in Modal */}
+      <Modal
+        opened={googleModalOpen}
+        onClose={() => {
+          setGoogleModalOpen(false);
+          setGoogleError(null);
+          setGoogleUnregistered(false);
+        }}
+        title={<Text fw={700}>Sign In with Google Identity</Text>}
+        centered
+        radius="md"
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Sign in using your verified Google organization owner credentials.
+          </Text>
+
+          {googleError && (
+            <Alert icon={<IconAlertCircle size={18} />} color={googleUnregistered ? 'yellow' : 'red'}>
+              {googleError}
+              {googleUnregistered && (
+                <Box mt="xs">
+                  <Button
+                    size="xs"
+                    color="teal"
+                    component="a"
+                    href="http://localhost:3000/onboard"
+                    rightSection={<IconExternalLink size={14} />}
+                  >
+                    Go to Website Onboarding
+                  </Button>
+                </Box>
+              )}
+            </Alert>
+          )}
+
+          <Button
+            variant="light"
+            color="teal"
+            leftSection={<IconSparkles size={16} />}
+            loading={googleMutation.isPending}
+            onClick={() => {
+              setGoogleToken('mock:founder@apexretail.com:Alex:Rivera');
+              handleGoogleSubmit('mock:founder@apexretail.com:Alex:Rivera');
+            }}
+          >
+            1-Click Demo Owner Sign-In
+          </Button>
+
+          <Divider label="or paste Google ID Token" labelPosition="center" />
+
+          <TextInput
+            label="Google ID Token / Mock Token"
+            placeholder="mock:email@store.com:First:Last"
+            value={googleToken}
+            onChange={(e) => setGoogleToken(e.target.value)}
+          />
+
+          <Button
+            fullWidth
+            loading={googleMutation.isPending}
+            onClick={() => handleGoogleSubmit()}
+          >
+            Verify & Enter App
+          </Button>
+        </Stack>
+      </Modal>
     </Box>
   );
 }
