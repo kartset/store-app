@@ -63,23 +63,16 @@ export function StoreList() {
     return false;
   }, [user, currentStore]);
 
-  // Derive active organization ID
-  const activeOrgId = useMemo(() => {
-    if (currentStore?.organization_id) return currentStore.organization_id;
-    if (user?.organizations?.[0]?.id) return user.organizations[0].id;
-    return undefined;
-  }, [currentStore, user]);
-
   // Restrict access for non-org-admin store staff: redirect directly to Counter POS
   if (!isOrgAdmin) {
     return <Navigate to="/pos" replace />;
   }
 
-  return <StoreListContent activeOrgId={activeOrgId} />;
+  return <StoreListContent />;
 }
 
-function StoreListContent({ activeOrgId }: { activeOrgId?: string }) {
-  const { data: stores, isLoading, error } = useStores({ organization_id: activeOrgId });
+function StoreListContent() {
+  const { data: stores, isLoading, error } = useStores();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Add Store Modal state

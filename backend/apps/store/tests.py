@@ -92,14 +92,18 @@ class StoreScopingAndRBACркаTests(APITestCase):
         self.assertEqual(created_store.organization_id, self.org1)
 
     def test_org_admin_cannot_create_store_for_other_org(self):
-        """Org Admin 1 cannot create a store for Org 2."""
+        """Even if payload includes a different organization_id, server strictly anchors to user's org."""
         self.client.force_authenticate(user=self.org_admin1)
         payload = {
-            "name": "Infiltrator Store",
+            "name": "Attempted Spoof Store",
             "organization_id": str(self.org2.id),
         }
         res = self.client.post("/api/stores/", payload)
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        # Verify it was anchored to org1, not org2
+        created = Store.objects.get(name="Attempted Spoof Store")
+        self.assertEqual(created.organization_id, self.org1)
+        self.assertNotEqual(created.organization_id, self.org2)
 
     def test_store_staff_sees_only_assigned_store(self):
         """Store staff assigned to store1_org1 sees only store1_org1, not store2_org1."""

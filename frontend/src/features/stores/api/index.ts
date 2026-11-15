@@ -15,17 +15,13 @@ export interface Store {
   };
 }
 
-export function useStores(params?: { organization_id?: string }) {
+export function useStores() {
   return useQuery({
-    queryKey: ['stores', params?.organization_id],
+    queryKey: ['stores'],
     queryFn: async () => {
-      const searchParams = new URLSearchParams({
-        fields: 'id,name,gst_number,address,is_active,organization_id,organization.name,organization.subdomain',
-      });
-      if (params?.organization_id) {
-        searchParams.append('organization_id', params.organization_id);
-      }
-      const response = await api.get<Store[]>(`/api/stores/?${searchParams.toString()}`);
+      const response = await api.get<Store[]>(
+        '/api/stores/?fields=id,name,gst_number,address,is_active,organization_id,organization.name,organization.subdomain'
+      );
       return response.data;
     },
   });
