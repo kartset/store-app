@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../../lib/axios';
 
 export interface Organization {
   id: string;
@@ -11,11 +10,25 @@ export interface Organization {
 }
 
 export function useOrganizations() {
-  return useQuery({
+  return useQuery<Organization[]>({
     queryKey: ['organizations'],
-    queryFn: async () => {
-      const response = await api.get<Organization[]>('/api/organizations/');
-      return response.data;
+    queryFn: () => {
+      try {
+        const stored = localStorage.getItem('user');
+        if (stored) {
+          const user = JSON.parse(stored);
+          if (Array.isArray(user.organizations)) {
+            return user.organizations.map((org: { id: string; name: string }) => ({
+              id: org.id,
+              name: org.name,
+              is_active: true,
+            }));
+          }
+        }
+      } catch {
+        // fallback to empty list
+      }
+      return [];
     },
   });
 }

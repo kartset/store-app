@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginForm } from './features/auth/components/LoginForm';
 import { AuthCallback } from './features/auth/components/AuthCallback';
 import { DashboardLayout } from './components/layout/DashboardLayout';
-import { OrganizationList } from './features/organizations/components/OrganizationList';
 import { StoreList } from './features/stores/components/StoreList';
 import { ProductList } from './features/products/components/ProductList';
 import { SubcategoryList } from './features/products/components/SubcategoryList';
@@ -27,8 +26,8 @@ function App() {
       
       {/* Protected Dashboard Routes */}
       <Route path="/" element={<DashboardLayout />}>
-        <Route index element={<Navigate to="/organizations" replace />} />
-        <Route path="organizations" element={<OrganizationList />} />
+        <Route index element={<Navigate to="/pos" replace />} />
+        <Route path="organizations" element={<Navigate to="/pos" replace />} />
         <Route path="stores" element={<StoreList />} />
         <Route path="products" element={<ProductList />} />
         <Route path="subcategories" element={<SubcategoryList />} />
