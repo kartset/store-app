@@ -99,7 +99,7 @@ class OrganizationCategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Organization category adoption.
     """
-    queryset = OrganizationCategory.objects.filter(is_deleted=False).select_related('category_id', 'organization_id')
+    queryset = OrganizationCategory.objects.filter(is_deleted=False).select_related('category_id', 'organization_id').order_by('id')
     serializer_class = OrganizationCategorySerializer
     permission_classes = [IsAuthenticated, IsOrgAdminOrReadOnly]
 
@@ -174,7 +174,7 @@ class StoreCategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Store <> Category Mappings.
     """
-    queryset = StoreCategory.objects.filter(is_deleted=False).select_related('category_id', 'store_id')
+    queryset = StoreCategory.objects.filter(is_deleted=False).select_related('category_id', 'store_id').order_by('id')
     serializer_class = StoreCategorySerializer
     permission_classes = [IsAuthenticated]
 
