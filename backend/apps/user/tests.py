@@ -275,3 +275,124 @@ class AppLoginStoreGateTests(TestCase):
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertIn('User is not associated with the requested store', str(res.data))
 
+
+class GoogleAuthAndOnboardingTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.google_auth_url = reverse('google_auth')
+        self.onboard_url = reverse('onboard_organization')
+
+    def test_google_auth_unregistered_user(self):
+        """Unregistered Google user gets registered=False and profile details."""
+        res = self.client.post(
+            self.google_auth_url,
+            {'id_token': 'mock:newowner@retail.com:Jane:Doe'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['registered'])
+        self.assertEqual(res.data['email'], 'newowner@retail.com')
+        self.assertEqual(res.data['first_name'], 'Jane')
+        self.assertEqual(res.data['last_name'], 'Doe')
+
+    def test_organization_onboarding_success(self):
+        """New organization owner successfully onboards and receives JWT tokens."""
+        res = self.client.post(
+            self.onboard_url,
+            {
+                'id_token': 'mock:founder@apexretail.com:Alex:Rivera',
+                'organization_name': 'Apex Retailers',
+                'subdomain': 'apex-retail',
+                'store_name': 'Apex Flagship Store',
+                'store_address': '123 Market St, San Francisco, CA',
+                'gst_number': 'GST-APEX-9988',
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertIn('access', res.data)
+        self.assertIn('refresh', res.data)
+        self.assertIn('user', res.data)
+        self.assertEqual(res.data['user']['email'], 'founder@apexretail.com')
+        self.assertTrue(res.data['user']['is_org_admin'])
+
+        # Verify DB records
+        user = User.objects.get(email='founder@apexretail.com')
+        self.assertEqual(user.first_name, 'Alex')
+        self.assertEqual(user.last_name, 'Rivera')
+
+        org = Organization.objects.get(subdomain='apex-retail')
+        self.assertEqual(org.name, 'Apex Retailers')
+
+        store = Store.objects.get(organization_id=org)
+        self.assertEqual(store.name, 'Apex Flagship Store')
+        self.assertEqual(store.address, '123 Market St, San Francisco, CA')
+
+        org_staff = OrganizationStaff.objects.get(user_id=user, organization_id=org)
+        self.assertEqual(org_staff.role, 'ORG_ADMIN')
+
+        store_staff = StoreStaff.objects.get(user_id=user, store_id=store)
+        self.assertEqual(store_staff.role, 'ADMIN')
+
+        # Current store in payload should be this flagship store
+        self.assertEqual(res.data['user']['current_store']['id'], str(store.id))
+        self.assertEqual(res.data['user']['current_store']['name'], 'Apex Flagship Store')
+
+    def test_onboarding_auto_generates_subdomain_and_handles_collision(self):
+        """When subdomain is blank, it auto-slugifies org name and increments on collision."""
+        Organization.objects.create(name='Global Shop', subdomain='global-shop')
+
+        res = self.client.post(
+            self.onboard_url,
+            {
+                'id_token': 'mock:owner2@globalshop.com:Sam:Green',
+                'organization_name': 'Global Shop',
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['organization']['subdomain'], 'global-shop-1')
+
+    def test_onboarding_rejects_duplicate_explicit_subdomain(self):
+        """Explicitly provided duplicate subdomain returns 400 validation error."""
+        Organization.objects.create(name='Existing Brand', subdomain='unique-slug')
+
+        res = self.client.post(
+            self.onboard_url,
+            {
+                'id_token': 'mock:duplicate@example.com:Dan:Smith',
+                'organization_name': 'Another Brand',
+                'subdomain': 'unique-slug',
+            },
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Subdomain 'unique-slug' is already in use", str(res.data))
+
+    def test_google_auth_registered_user_logs_in_directly(self):
+        """An already onboarded user signing in with Google receives their full JWT auth payload."""
+        # Onboard first
+        self.client.post(
+            self.onboard_url,
+            {
+                'id_token': 'mock:existing@brand.com:Elena:Rostova',
+                'organization_name': 'Elena Boutique',
+                'subdomain': 'elena-boutique',
+            },
+            format='json',
+        )
+
+        # Authenticate with Google
+        res = self.client.post(
+            self.google_auth_url,
+            {'id_token': 'mock:existing@brand.com:Elena:Rostova'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data['registered'])
+        self.assertIn('access', res.data)
+        self.assertIn('refresh', res.data)
+        self.assertEqual(res.data['user']['email'], 'existing@brand.com')
+        self.assertTrue(res.data['user']['is_org_admin'])
+
+
