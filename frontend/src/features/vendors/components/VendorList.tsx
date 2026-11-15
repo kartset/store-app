@@ -41,7 +41,6 @@ import {
 } from '@tabler/icons-react';
 
 import { useState, useMemo } from 'react';
-import { useOrganizations } from '../../organizations/api';
 import { useVendors, useDeleteVendor } from '../api';
 import { VendorDrawer } from './VendorDrawer';
 import { VendorProductCatalogModal } from './VendorProductCatalogModal';
@@ -53,9 +52,6 @@ import {
 } from '../types';
 
 export function VendorList() {
-  const { data: organizations } = useOrganizations();
-  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
-
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentTermsFilter, setPaymentTermsFilter] = useState<string>('');
@@ -79,14 +75,7 @@ export function VendorList() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
-  // Active organization resolution
-  const activeOrgId = useMemo(() => {
-    if (selectedOrgId) return selectedOrgId;
-    return organizations?.[0]?.id || '';
-  }, [selectedOrgId, organizations]);
-
   const { data: vendors, isLoading, error } = useVendors({
-    organization_id: activeOrgId || undefined,
     search: searchTerm || undefined,
     payment_terms: paymentTermsFilter || undefined,
     is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
@@ -184,19 +173,6 @@ export function VendorList() {
         </div>
 
         <Group gap="sm">
-          {organizations && organizations.length > 1 && (
-            <Select
-              placeholder="Filter by Organization"
-              data={organizations.map((org) => ({ value: org.id, label: org.name }))}
-              value={activeOrgId}
-              onChange={(val) => {
-                setSelectedOrgId(val || '');
-                setCurrentPage(1);
-              }}
-              style={{ width: 220 }}
-            />
-          )}
-
           <Button
             leftSection={<IconPlus size={16} />}
             color="brand"
@@ -571,7 +547,6 @@ export function VendorList() {
         opened={drawerOpened}
         onClose={() => setDrawerOpened(false)}
         vendor={selectedVendor}
-        defaultOrgId={activeOrgId}
         isReadOnly={isReadOnly}
       />
 

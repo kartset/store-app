@@ -47,7 +47,7 @@ export interface Vendor {
 }
 
 export interface CreateVendorInput {
-  organization_id: string;
+  organization_id?: string;
   name: string;
   trade_name?: string;
   vendor_code?: string;
