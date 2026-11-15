@@ -1,6 +1,7 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from db.models import OrganizationStaff
+from utils.tenant import get_user_organization
 
 
 class IsOrgAdminOrReadOnly(BasePermission):
@@ -25,6 +26,7 @@ class IsOrgAdminOrReadOnly(BasePermission):
             return True
 
         if request.method == 'POST':
+            user_org = get_user_organization(request.user)
             org_id = request.data.get('organization_id') or request.query_params.get('organization_id')
             if org_id:
                 return OrganizationStaff.objects.filter(
@@ -35,13 +37,16 @@ class IsOrgAdminOrReadOnly(BasePermission):
                     is_deleted=False,
                 ).exists()
 
-            # If no org_id in request body, verify user is an active Org Admin / Catalog Manager in at least one org
-            return OrganizationStaff.objects.filter(
-                user_id=request.user,
-                role__in=['ORG_ADMIN', 'CATALOG_MANAGER'],
-                is_active=True,
-                is_deleted=False,
-            ).exists()
+            if user_org:
+                return OrganizationStaff.objects.filter(
+                    user_id=request.user,
+                    organization_id=user_org,
+                    role__in=['ORG_ADMIN', 'CATALOG_MANAGER'],
+                    is_active=True,
+                    is_deleted=False,
+                ).exists()
+
+            return False
 
         # For PUT / PATCH / DELETE, delegate to object-level permission
         return True

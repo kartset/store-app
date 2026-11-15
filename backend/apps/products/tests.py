@@ -800,4 +800,87 @@ class MasterCatalogAPITests(TestCase):
         product = Product.objects.get(id=res.data['id'])
         self.assertEqual(product.catalogue_item_id, cat_item)
 
+    def test_products_and_brands_and_subcategories_scoped_server_side_without_org_id(self):
+        """
+        Verify tenant organization is derived server-side from request.user (JWT)
+        when organization_id is omitted from payloads and query params.
+        """
+        # Create an org_2 product to ensure isolation
+        p_org2 = Product.objects.create(
+            organization_id=self.org_2,
+            name='Org 2 Isolated Product',
+            sku='SKU-ORG2-ISO',
+            barcode='9999999999999',
+            base_mrp=Decimal('50.00'),
+        )
+        Brand.objects.create(organization_id=self.org_2, name='Org2 Brand')
+        Subcategory.objects.create(
+            organization_id=self.org_2,
+            category_id=self.cat_child,
+            name='Org2 Subcategory'
+        )
+
+        # 1. Create Brand without organization_id
+        brand_resp = self.client.post('/api/products/brands/', {
+            'name': 'Server Scoped Brand',
+            'slug': 'server-scoped-brand',
+        }, format='json')
+        self.assertEqual(brand_resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(str(brand_resp.data['organization_id']), str(self.org_1.id))
+        brand_id = brand_resp.data['id']
+
+        # 2. Create Subcategory without organization_id
+        sub_resp = self.client.post('/api/products/subcategories/', {
+            'category_id': str(self.cat_child.id),
+            'name': 'Server Scoped Subcategory',
+            'slug': 'server-scoped-sub',
+        }, format='json')
+        self.assertEqual(sub_resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(str(sub_resp.data['organization_id']), str(self.org_1.id))
+        sub_id = sub_resp.data['id']
+
+        # 3. Create Product without organization_id
+        prod_resp = self.client.post('/api/products/', {
+            'category_id': str(self.cat_child.id),
+            'subcategory_id': str(sub_id),
+            'brand_id': str(brand_id),
+            'name': 'Server Scoped Product',
+            'sku': 'SKU-SRV-01',
+            'barcode': '8901111222333',
+            'base_mrp': '150.00',
+        }, format='json')
+        self.assertEqual(prod_resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(str(prod_resp.data['organization_id']), str(self.org_1.id))
+
+        # 4. List Brands without organization_id query param
+        brand_list_resp = self.client.get('/api/products/brands/')
+        self.assertEqual(brand_list_resp.status_code, status.HTTP_200_OK)
+        brand_names = [b['name'] for b in brand_list_resp.data]
+        self.assertIn('Server Scoped Brand', brand_names)
+        self.assertNotIn('Org2 Brand', brand_names)
+
+        # 5. List Subcategories without organization_id query param
+        sub_list_resp = self.client.get('/api/products/subcategories/')
+        self.assertEqual(sub_list_resp.status_code, status.HTTP_200_OK)
+        sub_names = [s['name'] for s in sub_list_resp.data]
+        self.assertIn('Server Scoped Subcategory', sub_names)
+        self.assertNotIn('Org2 Subcategory', sub_names)
+
+        # 6. List Products without organization_id query param
+        prod_list_resp = self.client.get('/api/products/')
+        self.assertEqual(prod_list_resp.status_code, status.HTTP_200_OK)
+        prod_skus = [p['sku'] for p in prod_list_resp.data]
+        self.assertIn('SKU-SRV-01', prod_skus)
+        self.assertNotIn('SKU-ORG2-ISO', prod_skus)
+
+        # 7. Barcode lookup without organization_id query param
+        bar_lookup_resp = self.client.get('/api/products/barcode/8901111222333/')
+        self.assertEqual(bar_lookup_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(bar_lookup_resp.data['sku'], 'SKU-SRV-01')
+
+        # 8. Barcode lookup for another org's product returns 404
+        iso_lookup_resp = self.client.get('/api/products/barcode/9999999999999/')
+        self.assertEqual(iso_lookup_resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
 
