@@ -14,7 +14,8 @@ from django.db.models.functions import (
     TruncWeek,
 )
 from django.utils import timezone
-from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -26,8 +27,93 @@ from db.models import (
     InvoiceItem,
     InvoiceStatus,
     Order,
+    OrganizationStaff,
     Payment,
+    Store,
+    StoreStaff,
 )
+from utils.tenant import get_user_organization
+
+
+def get_analytics_accessible_store_ids(request, requested_store_id=None):
+    """
+    Resolves the list of Store IDs the authenticated user is permitted to query for analytics:
+    1. Superuser:
+       - If requested_store_id is specified: validates store exists, returns [requested_store_id].
+       - If no requested_store_id: returns None (unrestricted global query).
+    2. Org Admin (role='ORG_ADMIN'):
+       - Auto-scopes to their organization's active stores.
+       - If requested_store_id: validates it belongs to user's organization; raises PermissionDenied if not.
+       - If no requested_store_id: returns list of all store IDs in user's organization.
+    3. Store Staff:
+       - Auto-scopes to their assigned stores in StoreStaff.
+       - If requested_store_id: validates it is in their assigned stores; raises PermissionDenied if not.
+       - If no requested_store_id: returns list of all assigned store IDs.
+    4. Unaffiliated user:
+       - Returns [] (evaluates to empty queryset / 0 metrics).
+    """
+    user = request.user
+    if not user or not user.is_authenticated:
+        raise PermissionDenied("Authentication credentials were not provided.")
+
+    if getattr(user, 'is_superuser', False):
+        if requested_store_id:
+            if not Store.objects.filter(id=requested_store_id, is_deleted=False).exists():
+                raise PermissionDenied("Store location not found.")
+            return [requested_store_id]
+        return None
+
+    # Check Org Admin status
+    is_org_admin = OrganizationStaff.objects.filter(
+        user_id=user,
+        role='ORG_ADMIN',
+        is_active=True,
+        is_deleted=False,
+    ).exists()
+
+    if is_org_admin:
+        user_org = get_user_organization(user)
+        if not user_org:
+            return []
+        org_store_ids = list(
+            Store.objects.filter(
+                organization_id=user_org,
+                is_deleted=False,
+            ).values_list('id', flat=True)
+        )
+        if requested_store_id:
+            store_exists = Store.objects.filter(
+                id=requested_store_id,
+                organization_id=user_org,
+                is_deleted=False,
+            ).exists()
+            if not store_exists:
+                raise PermissionDenied("You do not have permission to view analytics for this store location.")
+            return [requested_store_id]
+
+        return org_store_ids
+
+    # Store Staff (non-org-admin)
+    assigned_store_ids = list(
+        StoreStaff.objects.filter(
+            user_id=user,
+            is_deleted=False,
+        ).values_list('store_id_id', flat=True)
+    )
+    if not assigned_store_ids:
+        return []
+
+    if requested_store_id:
+        store_exists = Store.objects.filter(
+            id=requested_store_id,
+            id__in=assigned_store_ids,
+            is_deleted=False,
+        ).exists()
+        if not store_exists:
+            raise PermissionDenied("You do not have permission to view analytics for this store location.")
+        return [requested_store_id]
+
+    return assigned_store_ids
 
 
 def _parse_date_range(request):
@@ -67,11 +153,12 @@ class AnalyticsOverviewView(APIView):
     Provides Gross Sales, Returns, Net Revenue, AOV, Total Invoices,
     Orders, Discounts, Taxes, and Growth comparison against prior equivalent period.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         store_id = request.query_params.get('store_id')
         start_date, end_date = _parse_date_range(request)
+        store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
         # Base Invoice Filters
         inv_filter = Q(
@@ -80,8 +167,8 @@ class AnalyticsOverviewView(APIView):
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
         )
-        if store_id:
-            inv_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            inv_filter &= Q(store_id__in=store_ids)
 
         # Base Credit Note Filters
         cn_filter = Q(
@@ -90,8 +177,8 @@ class AnalyticsOverviewView(APIView):
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
         )
-        if store_id:
-            cn_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            cn_filter &= Q(store_id__in=store_ids)
 
         # Base Order Filters
         ord_filter = Q(
@@ -99,8 +186,8 @@ class AnalyticsOverviewView(APIView):
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
         )
-        if store_id:
-            ord_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            ord_filter &= Q(store_id__in=store_ids)
 
         # Current Period Aggregations
         inv_agg = Invoice.objects.filter(inv_filter).aggregate(
@@ -134,8 +221,8 @@ class AnalyticsOverviewView(APIView):
             created_at__date__gte=prev_start,
             created_at__date__lte=prev_end,
         )
-        if store_id:
-            prev_inv_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            prev_inv_filter &= Q(store_id__in=store_ids)
 
         prev_cn_filter = Q(
             is_deleted=False,
@@ -143,8 +230,8 @@ class AnalyticsOverviewView(APIView):
             created_at__date__gte=prev_start,
             created_at__date__lte=prev_end,
         )
-        if store_id:
-            prev_cn_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            prev_cn_filter &= Q(store_id__in=store_ids)
 
         prev_gross = Invoice.objects.filter(prev_inv_filter).aggregate(sum=Sum('grand_total'))['sum'] or Decimal('0.00')
         prev_returns = CreditNote.objects.filter(prev_cn_filter).aggregate(sum=Sum('total_refund_amount'))['sum'] or Decimal('0.00')
@@ -163,20 +250,19 @@ class AnalyticsOverviewView(APIView):
         )
 
         return Response({
-            'period': {
-                'start_date': str(start_date),
-                'end_date': str(end_date),
-                'days': period_days,
-            },
+            'period_start': start_date.isoformat(),
+            'period_end': end_date.isoformat(),
+            'store_id': store_id,
             'gross_sales': str(gross_sales.quantize(Decimal('0.01'))),
             'returns_total': str(returns_total.quantize(Decimal('0.01'))),
             'net_sales': str(net_sales.quantize(Decimal('0.01'))),
-            'total_invoices': total_invoices,
-            'total_orders': total_orders,
-            'average_order_value': str(aov),
             'total_discount': str(total_discount.quantize(Decimal('0.01'))),
             'total_tax': str(total_tax.quantize(Decimal('0.01'))),
-            'growth': {
+            'total_invoices': total_invoices,
+            'total_orders': total_orders,
+            'aov': str(aov),
+            'average_order_value': str(aov),
+            'comparison': {
                 'sales_growth_pct': float(sales_growth_pct) if sales_growth_pct is not None else 0.0,
                 'invoice_growth_pct': round(float(invoice_growth_pct), 1) if invoice_growth_pct is not None else 0.0,
                 'prev_net_sales': str(prev_net.quantize(Decimal('0.01'))),
@@ -191,12 +277,13 @@ class SalesTrendAnalyticsView(APIView):
     Supports interval grouping ('day', 'week', 'month') with sales, returns,
     discounts, taxes, and transaction volume over time.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         store_id = request.query_params.get('store_id')
         interval = request.query_params.get('interval', 'day').lower()
         start_date, end_date = _parse_date_range(request)
+        store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
         trunc_fn = TruncDate
         if interval == 'week':
@@ -210,8 +297,8 @@ class SalesTrendAnalyticsView(APIView):
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
         )
-        if store_id:
-            inv_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            inv_filter &= Q(store_id__in=store_ids)
 
         sales_by_date = (
             Invoice.objects.filter(inv_filter)
@@ -232,8 +319,8 @@ class SalesTrendAnalyticsView(APIView):
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
         )
-        if store_id:
-            cn_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            cn_filter &= Q(store_id__in=store_ids)
 
         returns_by_date = (
             CreditNote.objects.filter(cn_filter)
@@ -248,27 +335,28 @@ class SalesTrendAnalyticsView(APIView):
 
         # Build combined chronological points
         trend_data = []
-        for row in sales_by_date:
-            b_date = row['bucket']
-            date_key = b_date.strftime('%Y-%m-%d') if hasattr(b_date, 'strftime') else str(b_date)
-            gross = row['gross_sales'] or Decimal('0.00')
-            refunds = returns_map.get(date_key, Decimal('0.00'))
-            net = max(Decimal('0.00'), gross - refunds)
+        for point in sales_by_date:
+            b_val = point['bucket']
+            date_key = b_val.strftime('%Y-%m-%d') if hasattr(b_val, 'strftime') else str(b_val)
+            gross = point['gross_sales'] or Decimal('0.00')
+            ret = returns_map.get(date_key, Decimal('0.00')) or Decimal('0.00')
+            net = max(Decimal('0.00'), gross - ret)
 
             trend_data.append({
                 'date': date_key,
                 'gross_sales': str(gross.quantize(Decimal('0.01'))),
-                'returns': str(refunds.quantize(Decimal('0.01'))),
+                'returns': str(ret.quantize(Decimal('0.01'))),
                 'net_sales': str(net.quantize(Decimal('0.01'))),
-                'discount': str((row['discount'] or Decimal('0.00')).quantize(Decimal('0.01'))),
-                'tax': str((row['tax'] or Decimal('0.00')).quantize(Decimal('0.01'))),
-                'invoices': row['invoices'],
+                'discount': str((point['discount'] or Decimal('0.00')).quantize(Decimal('0.01'))),
+                'tax': str((point['tax'] or Decimal('0.00')).quantize(Decimal('0.01'))),
+                'invoices': point['invoices'] or 0,
             })
 
         return Response({
             'interval': interval,
-            'start_date': str(start_date),
-            'end_date': str(end_date),
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'points': trend_data,
             'data': trend_data,
         })
 
@@ -277,13 +365,14 @@ class TopProductsAnalyticsView(APIView):
     """
     Best-Selling Products by Revenue and Volume.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         store_id = request.query_params.get('store_id')
         sort_by = request.query_params.get('sort_by', 'revenue')
         limit = min(50, max(1, int(request.query_params.get('limit', 10))))
         start_date, end_date = _parse_date_range(request)
+        store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
         item_filter = Q(
             invoice_id__is_deleted=False,
@@ -292,8 +381,8 @@ class TopProductsAnalyticsView(APIView):
             invoice_id__created_at__date__lte=end_date,
             is_deleted=False,
         )
-        if store_id:
-            item_filter &= Q(invoice_id__store_id=store_id)
+        if store_ids is not None:
+            item_filter &= Q(invoice_id__store_id__in=store_ids)
 
         # Total revenue in period for calculating percentage contribution
         total_period_revenue = InvoiceItem.objects.filter(item_filter).aggregate(
@@ -345,11 +434,12 @@ class CategoryBreakdownAnalyticsView(APIView):
     """
     Sales and Volume Breakdown by Product Category.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         store_id = request.query_params.get('store_id')
         start_date, end_date = _parse_date_range(request)
+        store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
         item_filter = Q(
             invoice_id__is_deleted=False,
@@ -358,8 +448,8 @@ class CategoryBreakdownAnalyticsView(APIView):
             invoice_id__created_at__date__lte=end_date,
             is_deleted=False,
         )
-        if store_id:
-            item_filter &= Q(invoice_id__store_id=store_id)
+        if store_ids is not None:
+            item_filter &= Q(invoice_id__store_id__in=store_ids)
 
         total_revenue = InvoiceItem.objects.filter(item_filter).aggregate(
             sum=Sum('line_total')
@@ -369,30 +459,30 @@ class CategoryBreakdownAnalyticsView(APIView):
             InvoiceItem.objects.filter(item_filter)
             .values('product_id__category_id', 'product_id__category_id__name')
             .annotate(
-                revenue=Sum('line_total'),
                 units_sold=Sum('quantity'),
-                items_count=Count('id'),
+                revenue=Sum('line_total'),
             )
             .order_by('-revenue')
         )
 
         categories = []
-        for cat in category_agg:
-            rev = cat['revenue'] or Decimal('0.00')
-            cat_name = cat['product_id__category_id__name'] or 'Uncategorized'
-            pct = (
+        for row in category_agg:
+            cat_name = row['product_id__category_id__name'] or 'Uncategorized'
+            cat_id = str(row['product_id__category_id']) if row['product_id__category_id'] else None
+            rev = row['revenue'] or Decimal('0.00')
+            units = row['units_sold'] or 0
+            share_pct = (
                 (rev / total_revenue * 100).quantize(Decimal('0.1'))
                 if total_revenue > Decimal('0.00')
                 else Decimal('0.0')
             )
 
             categories.append({
-                'category_id': cat['product_id__category_id'],
+                'category_id': cat_id,
                 'category_name': cat_name,
+                'units_sold': units,
                 'revenue': str(rev.quantize(Decimal('0.01'))),
-                'units_sold': cat['units_sold'] or 0,
-                'items_count': cat['items_count'] or 0,
-                'percentage_share': float(pct),
+                'revenue_share_pct': float(share_pct),
             })
 
         return Response({
@@ -406,11 +496,12 @@ class HourlyFootfallAnalyticsView(APIView):
     Hourly Transaction & Sales Footfall Distribution (00:00 to 23:00).
     Identifies peak customer buying hours across store branches.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         store_id = request.query_params.get('store_id')
         start_date, end_date = _parse_date_range(request)
+        store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
         inv_filter = Q(
             is_deleted=False,
@@ -418,8 +509,8 @@ class HourlyFootfallAnalyticsView(APIView):
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
         )
-        if store_id:
-            inv_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            inv_filter &= Q(store_id__in=store_ids)
 
         hourly_qs = (
             Invoice.objects.filter(inv_filter)
@@ -465,11 +556,12 @@ class PaymentMethodsAnalyticsView(APIView):
     """
     Payment Tender Distribution (Cash, UPI, Card, Store Credit, Razorpay).
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         store_id = request.query_params.get('store_id')
         start_date, end_date = _parse_date_range(request)
+        store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
         payment_filter = Q(
             invoice_id__is_deleted=False,
@@ -478,8 +570,8 @@ class PaymentMethodsAnalyticsView(APIView):
             is_deleted=False,
             status='SUCCESS',
         )
-        if store_id:
-            payment_filter &= Q(invoice_id__store_id=store_id)
+        if store_ids is not None:
+            payment_filter &= Q(invoice_id__store_id__in=store_ids)
 
         total_tendered = Payment.objects.filter(payment_filter).aggregate(
             sum=Sum('amount')
@@ -521,14 +613,15 @@ class InventoryHealthAnalyticsView(APIView):
     """
     Inventory Stock Health, Holding Valuation & Low Stock Risk Monitor.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         store_id = request.query_params.get('store_id')
+        store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
         inv_filter = Q(is_deleted=False)
-        if store_id:
-            inv_filter &= Q(store_id=store_id)
+        if store_ids is not None:
+            inv_filter &= Q(store_id__in=store_ids)
 
         qs = Inventory.objects.filter(inv_filter).select_related('product_id', 'store_id')
 
