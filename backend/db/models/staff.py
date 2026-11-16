@@ -56,12 +56,14 @@ class StoreStaff(BaseModel):
         related_name='staff_members'
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='CASHIER')
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         verbose_name_plural = 'store staff'
         unique_together = ('user_id', 'store_id')
         indexes = [
             models.Index(fields=['store_id', 'role']),
+            models.Index(fields=['store_id', 'is_active']),
         ]
 
     def __str__(self):
