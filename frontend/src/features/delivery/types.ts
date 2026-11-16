@@ -1,3 +1,5 @@
+import type { PaginationParams } from '../../types/pagination';
+
 export type DeliveryType =
   | 'INTERNAL'
   | 'DUNZO'
@@ -66,7 +68,7 @@ export interface Delivery {
   order?: DeliveryOrderSnapshot;
 }
 
-export interface DeliveryFilterParams {
+export interface DeliveryFilterParams extends PaginationParams {
   store_id?: string;
   status?: string;
   delivery_type?: string;

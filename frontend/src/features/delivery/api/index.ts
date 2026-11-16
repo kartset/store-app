@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
+import type { PaginatedResponse } from '../../../types/pagination';
 import type {
   Delivery,
   DeliveryCreatePayload,
@@ -10,11 +11,14 @@ import type {
   PipelineSummary,
 } from '../types';
 
-export function useDeliveries(params?: DeliveryFilterParams) {
+export function usePaginatedDeliveries(params?: DeliveryFilterParams) {
   return useQuery({
-    queryKey: ['deliveries', params],
+    queryKey: ['deliveries', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.store_id) queryParams.store_id = params.store_id;
       if (params?.status) queryParams.status = params.status;
       if (params?.delivery_type) queryParams.delivery_type = params.delivery_type;
@@ -22,7 +26,27 @@ export function useDeliveries(params?: DeliveryFilterParams) {
       if (params?.start_date) queryParams.start_date = params.start_date;
       if (params?.end_date) queryParams.end_date = params.end_date;
 
-      const response = await api.get<Delivery[] | { results: Delivery[] }>('/api/deliveries/', {
+      const response = await api.get<PaginatedResponse<Delivery>>('/api/deliveries/', {
+        params: queryParams,
+      });
+      return response.data;
+    },
+  });
+}
+
+export function useDeliveries(params?: DeliveryFilterParams) {
+  return useQuery({
+    queryKey: ['deliveries', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = { page_size: '100' };
+      if (params?.store_id) queryParams.store_id = params.store_id;
+      if (params?.status) queryParams.status = params.status;
+      if (params?.delivery_type) queryParams.delivery_type = params.delivery_type;
+      if (params?.search) queryParams.search = params.search;
+      if (params?.start_date) queryParams.start_date = params.start_date;
+      if (params?.end_date) queryParams.end_date = params.end_date;
+
+      const response = await api.get<PaginatedResponse<Delivery> | Delivery[]>('/api/deliveries/', {
         params: queryParams,
       });
 

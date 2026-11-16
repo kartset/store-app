@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
+import type { PaginatedResponse } from '../../../types/pagination';
 import type {
   CreditNote,
   CreditNoteFilterParams,
@@ -10,11 +11,14 @@ import type {
   ProcessReturnPayload,
 } from '../types';
 
-export function useInvoices(params?: InvoiceFilterParams) {
+export function usePaginatedInvoices(params?: InvoiceFilterParams) {
   return useQuery({
-    queryKey: ['invoices', params],
+    queryKey: ['invoices', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.store_id) queryParams.store_id = params.store_id;
       if (params?.customer_id) queryParams.customer_id = params.customer_id;
       if (params?.status) queryParams.status = params.status;
@@ -23,7 +27,28 @@ export function useInvoices(params?: InvoiceFilterParams) {
       if (params?.start_date) queryParams.start_date = params.start_date;
       if (params?.end_date) queryParams.end_date = params.end_date;
 
-      const response = await api.get<Invoice[] | { results: Invoice[] }>('/api/invoices/', {
+      const response = await api.get<PaginatedResponse<Invoice>>('/api/invoices/', {
+        params: queryParams,
+      });
+      return response.data;
+    },
+  });
+}
+
+export function useInvoices(params?: InvoiceFilterParams) {
+  return useQuery({
+    queryKey: ['invoices', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = { page_size: '100' };
+      if (params?.store_id) queryParams.store_id = params.store_id;
+      if (params?.customer_id) queryParams.customer_id = params.customer_id;
+      if (params?.status) queryParams.status = params.status;
+      if (params?.type) queryParams.type = params.type;
+      if (params?.search) queryParams.search = params.search;
+      if (params?.start_date) queryParams.start_date = params.start_date;
+      if (params?.end_date) queryParams.end_date = params.end_date;
+
+      const response = await api.get<PaginatedResponse<Invoice> | Invoice[]>('/api/invoices/', {
         params: queryParams,
       });
 

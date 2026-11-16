@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
+import type { PaginatedResponse } from '../../../types/pagination';
 import type {
   Order,
   OrderCreatePayload,
@@ -8,11 +9,14 @@ import type {
   OrderStats,
 } from '../types';
 
-export function useOrders(params?: OrderFilterParams) {
+export function usePaginatedOrders(params?: OrderFilterParams) {
   return useQuery({
-    queryKey: ['orders', params],
+    queryKey: ['orders', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.store_id) queryParams.store_id = params.store_id;
       if (params?.customer_id) queryParams.customer_id = params.customer_id;
       if (params?.status) queryParams.status = params.status;
@@ -22,7 +26,29 @@ export function useOrders(params?: OrderFilterParams) {
       if (params?.start_date) queryParams.start_date = params.start_date;
       if (params?.end_date) queryParams.end_date = params.end_date;
 
-      const response = await api.get<Order[] | { results: Order[] }>('/api/orders/', {
+      const response = await api.get<PaginatedResponse<Order>>('/api/orders/', {
+        params: queryParams,
+      });
+      return response.data;
+    },
+  });
+}
+
+export function useOrders(params?: OrderFilterParams) {
+  return useQuery({
+    queryKey: ['orders', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = { page_size: '100' };
+      if (params?.store_id) queryParams.store_id = params.store_id;
+      if (params?.customer_id) queryParams.customer_id = params.customer_id;
+      if (params?.status) queryParams.status = params.status;
+      if (params?.fulfillment_type) queryParams.fulfillment_type = params.fulfillment_type;
+      if (params?.payment_status) queryParams.payment_status = params.payment_status;
+      if (params?.search) queryParams.search = params.search;
+      if (params?.start_date) queryParams.start_date = params.start_date;
+      if (params?.end_date) queryParams.end_date = params.end_date;
+
+      const response = await api.get<PaginatedResponse<Order> | Order[]>('/api/orders/', {
         params: queryParams,
       });
 

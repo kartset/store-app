@@ -18,7 +18,7 @@ import {
   Menu,
   Modal,
   CopyButton,
-  Pagination,
+  Box,
 } from '@mantine/core';
 
 import {
@@ -41,7 +41,8 @@ import {
 } from '@tabler/icons-react';
 
 import { useState, useMemo } from 'react';
-import { useVendors, useDeleteVendor } from '../api';
+import { usePaginatedVendors, useDeleteVendor } from '../api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import { VendorDrawer } from './VendorDrawer';
 import { VendorProductCatalogModal } from './VendorProductCatalogModal';
 import {
@@ -71,37 +72,29 @@ export function VendorList() {
   const [catalogVendor, setCatalogVendor] = useState<Vendor | null>(null);
 
   // Pagination state
-
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(5);
 
-  const { data: vendors, isLoading, error } = useVendors({
+  const { data: paginatedData, isLoading, error } = usePaginatedVendors({
+    page: currentPage,
+    page_size: pageSize,
     search: searchTerm || undefined,
     payment_terms: paymentTermsFilter || undefined,
     is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
   });
 
   const deleteVendorMutation = useDeleteVendor();
+  const paginatedVendors = paginatedData?.results || [];
 
   // Metrics Calculations
   const metrics = useMemo(() => {
-    const list = vendors || [];
-    const total = list.length;
-    const active = list.filter((v) => v.is_active).length;
-    const net30 = list.filter((v) => v.payment_terms === 'NET_30').length;
-    const totalCredit = list.reduce((acc, v) => acc + Number(v.credit_limit || 0), 0);
+    const total = paginatedData?.count ?? 0;
+    const active = paginatedVendors.filter((v) => v.is_active).length;
+    const net30 = paginatedVendors.filter((v) => v.payment_terms === 'NET_30').length;
+    const totalCredit = paginatedVendors.reduce((acc, v) => acc + Number(v.credit_limit || 0), 0);
 
     return { total, active, net30, totalCredit };
-  }, [vendors]);
-
-  // Paginated records
-  const paginatedVendors = useMemo(() => {
-    if (!vendors) return [];
-    const start = (currentPage - 1) * pageSize;
-    return vendors.slice(start, start + pageSize);
-  }, [vendors, currentPage]);
-
-  const totalPages = Math.ceil((vendors?.length || 0) / pageSize) || 1;
+  }, [paginatedData, paginatedVendors]);
 
   // Handler to open create drawer
   const handleOpenCreate = () => {
@@ -325,7 +318,7 @@ export function VendorList() {
               Failed to load vendor records. Please refresh or verify permissions.
             </Text>
           </Center>
-        ) : !vendors || vendors.length === 0 ? (
+        ) : !paginatedVendors || paginatedVendors.length === 0 ? (
           <Center py={60}>
             <Stack align="center" gap="md">
               <ThemeIcon size={56} radius="xl" color="gray" variant="light">
@@ -529,15 +522,17 @@ export function VendorList() {
             </Table>
 
             {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <Group justify="space-between" p="md" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <Text size="xs" c="dimmed">
-                  Showing {(currentPage - 1) * pageSize + 1} to{' '}
-                  {Math.min(currentPage * pageSize, vendors.length)} of {vendors.length} vendors
-                </Text>
-                <Pagination value={currentPage} onChange={setCurrentPage} total={totalPages} color="brand" size="sm" />
-              </Group>
-            )}
+            <Box p="md" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <TablePagination
+                page={currentPage}
+                pageSize={pageSize}
+                totalCount={paginatedData?.count ?? 0}
+                totalPages={paginatedData?.total_pages ?? 1}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                disabled={isLoading}
+              />
+            </Box>
           </>
         )}
       </Card>

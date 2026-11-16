@@ -32,7 +32,8 @@ import {
 } from '@tabler/icons-react';
 import { useState, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useStores, useCreateStore } from '../api';
+import { usePaginatedStores, useCreateStore } from '../api';
+import { TablePagination } from '../../../components/common/TablePagination';
 
 export function StoreList() {
   // Read authenticated user & active store role from localStorage
@@ -72,8 +73,16 @@ export function StoreList() {
 }
 
 function StoreListContent() {
-  const { data: stores, isLoading, error } = useStores();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const { data, isLoading, error } = usePaginatedStores({
+    page,
+    page_size: pageSize,
+    search: searchQuery.trim() || undefined,
+  });
+  const stores = data?.results || [];
 
   // Add Store Modal state
   const [modalOpened, setModalOpened] = useState(false);
@@ -83,17 +92,7 @@ function StoreListContent() {
   const [errorMessage, setErrorMessage] = useState('');
   const createStoreMutation = useCreateStore();
 
-  const filteredStores = useMemo(() => {
-    if (!stores) return [];
-    if (!searchQuery.trim()) return stores;
-    const q = searchQuery.toLowerCase();
-    return stores.filter(
-      (store) =>
-        store.name?.toLowerCase().includes(q) ||
-        store.gst_number?.toLowerCase().includes(q) ||
-        store.address?.toLowerCase().includes(q)
-    );
-  }, [stores, searchQuery]);
+  const filteredStores = stores;
 
   const handleOpenModal = () => {
     setName('');
@@ -151,7 +150,7 @@ function StoreListContent() {
     );
   }
 
-  const totalCount = stores?.length || 0;
+  const totalCount = data?.count ?? 0;
   const activeCount = stores?.filter((s) => s.is_active !== false).length || 0;
   const gstRegisteredCount = stores?.filter((s) => Boolean(s.gst_number)).length || 0;
 
@@ -253,7 +252,10 @@ function StoreListContent() {
             placeholder="Search stores by name, GST number, or address..."
             leftSection={<IconSearch size={16} stroke={1.5} color="var(--text-muted)" />}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.currentTarget.value)}
+            onChange={(e) => {
+              setSearchQuery(e.currentTarget.value);
+              setPage(1);
+            }}
             w={380}
             radius="md"
           />
@@ -380,6 +382,16 @@ function StoreListContent() {
             </Table>
           </Table.ScrollContainer>
         )}
+
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalCount={data?.count ?? 0}
+          totalPages={data?.total_pages ?? 1}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          disabled={isLoading}
+        />
       </Card>
 
       {/* Add Store Modal */}

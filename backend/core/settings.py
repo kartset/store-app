@@ -156,7 +156,9 @@ CORS_ALLOWED_ORIGINS = [
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'apps.user.auth.AppJWTAuthentication',
-    )
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'utils.pagination.EnhancedPageNumberPagination',
+    'PAGE_SIZE': 5,
 }
 
 from datetime import timedelta

@@ -191,19 +191,22 @@ class OrderAPITests(TestCase):
         # Store filter
         res = self.client.get(f'/api/orders/?store_id={self.store.id}')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 2)
+        self.assertEqual(res.data['count'], 2)
+        self.assertEqual(len(res.data['results']), 2)
 
         # Status filter
         res = self.client.get('/api/orders/?status=PENDING')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 1)
-        self.assertEqual(res.data[0]['id'], str(order1.id))
+        self.assertEqual(res.data['count'], 1)
+        self.assertEqual(len(res.data['results']), 1)
+        self.assertEqual(res.data['results'][0]['id'], str(order1.id))
 
         # Search filter
         res = self.client.get('/api/orders/?search=Rahul')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 1)
-        self.assertEqual(res.data[0]['id'], str(order2.id))
+        self.assertEqual(res.data['count'], 1)
+        self.assertEqual(len(res.data['results']), 1)
+        self.assertEqual(res.data['results'][0]['id'], str(order2.id))
 
     def test_retrieve_order(self):
         """Verifies retrieving single order detail with nested items and store/customer."""

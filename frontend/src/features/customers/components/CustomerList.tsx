@@ -18,7 +18,7 @@ import {
   Menu,
   Modal,
   CopyButton,
-  Pagination,
+  Box,
   Avatar,
   Paper,
   Divider,
@@ -45,7 +45,8 @@ import {
   IconReceipt,
 } from '@tabler/icons-react';
 import { useState, useMemo } from 'react';
-import { useCustomers, useDeleteCustomer } from '../api';
+import { usePaginatedCustomers, useDeleteCustomer } from '../api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import { CustomerDrawer } from './CustomerDrawer';
 import { Customer360Drawer } from './Customer360Drawer';
 import { POSCustomerLookup } from './POSCustomerLookup';
@@ -78,35 +79,28 @@ export function CustomerList() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(5);
 
-  const { data: customers, isLoading, error } = useCustomers({
+  const { data: paginatedData, isLoading, error } = usePaginatedCustomers({
+    page: currentPage,
+    page_size: pageSize,
     search: searchTerm || undefined,
     customer_type: (typeFilter as CustomerType) || undefined,
     is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
   });
 
   const deleteCustomerMutation = useDeleteCustomer();
+  const paginatedCustomers = paginatedData?.results || [];
 
   // Metrics Calculations
   const metrics = useMemo(() => {
-    const list = customers || [];
-    const total = list.length;
-    const active = list.filter((c) => c.is_active).length;
-    const b2b = list.filter((c) => c.customer_type === 'B2B').length;
-    const totalLoyalty = list.reduce((acc, c) => acc + (c.total_loyalty_points || 0), 0);
+    const total = paginatedData?.count ?? 0;
+    const active = paginatedCustomers.filter((c) => c.is_active).length;
+    const b2b = paginatedCustomers.filter((c) => c.customer_type === 'B2B').length;
+    const totalLoyalty = paginatedCustomers.reduce((acc, c) => acc + (c.total_loyalty_points || 0), 0);
 
     return { total, active, b2b, totalLoyalty };
-  }, [customers]);
-
-  // Paginated records
-  const paginatedCustomers = useMemo(() => {
-    if (!customers) return [];
-    const start = (currentPage - 1) * pageSize;
-    return customers.slice(start, start + pageSize);
-  }, [customers, currentPage]);
-
-  const totalPages = Math.ceil((customers?.length || 0) / pageSize) || 1;
+  }, [paginatedData, paginatedCustomers]);
 
   // Open create drawer
   const handleOpenCreate = () => {
@@ -592,22 +586,17 @@ export function CustomerList() {
             </Table.ScrollContainer>
 
             {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <Group justify="space-between" p="md" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <Text size="xs" c="dimmed">
-                  Showing {(currentPage - 1) * pageSize + 1} to{' '}
-                  {Math.min(currentPage * pageSize, customers?.length || 0)} of {customers?.length || 0}{' '}
-                  customers
-                </Text>
-                <Pagination
-                  value={currentPage}
-                  onChange={setCurrentPage}
-                  total={totalPages}
-                  size="sm"
-                  radius="md"
-                />
-              </Group>
-            )}
+            <Box p="md" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <TablePagination
+                page={currentPage}
+                pageSize={pageSize}
+                totalCount={paginatedData?.count ?? 0}
+                totalPages={paginatedData?.total_pages ?? 1}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                disabled={isLoading}
+              />
+            </Box>
           </div>
         )}
       </Card>

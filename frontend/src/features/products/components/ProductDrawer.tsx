@@ -37,13 +37,15 @@ import {
   useCategories,
   useOrganizationCategories,
   useBrands,
+  usePaginatedBrands,
   useCreateProduct,
   useUpdateProduct,
-  useSubcategories,
+  usePaginatedSubcategories,
   useCreateSubcategory,
   lookupGlobalCatalogue,
 } from '../api';
-import type { CatalogueItem, CreateProductPayload, Product, UnitOfMeasure } from '../types';
+import { PaginatedSelect } from '../../../components/common/PaginatedSelect';
+import type { Brand, CatalogueItem, CreateProductPayload, Product, Subcategory, UnitOfMeasure } from '../types';
 
 
 interface ProductDrawerProps {
@@ -100,7 +102,32 @@ function ProductDrawerForm({
     return [];
   }, [orgCategories, platformCategories]);
 
-  const { data: brands } = useBrands();
+  const { data: allBrands } = useBrands();
+
+  // Paginated Brands state
+  const [brandPage, setBrandPage] = useState(1);
+  const [brandSearch, setBrandSearch] = useState('');
+  const [accumulatedBrands, setAccumulatedBrands] = useState<Brand[]>([]);
+
+  const { data: brandPageData, isFetching: brandsFetching } = usePaginatedBrands({
+    page: brandPage,
+    page_size: 5,
+    search: brandSearch || undefined,
+  });
+
+  useEffect(() => {
+    if (brandPageData?.results) {
+      if (brandPage === 1) {
+        setAccumulatedBrands(brandPageData.results);
+      } else {
+        setAccumulatedBrands((prev) => {
+          const ids = new Set(prev.map((b) => b.id));
+          const newItems = brandPageData.results.filter((b) => !ids.has(b.id));
+          return [...prev, ...newItems];
+        });
+      }
+    }
+  }, [brandPageData, brandPage]);
 
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
@@ -126,10 +153,39 @@ function ProductDrawerForm({
   const [isReturnable, setIsReturnable] = useState(product?.is_returnable ?? true);
   const [isActive, setIsActive] = useState(product?.is_active ?? true);
 
-  // Subcategories query scoped to category
-  const { data: subcategories } = useSubcategories(
-    categoryId ? { category_id: categoryId } : undefined
+  // Paginated Subcategories state scoped to category
+  const [subPage, setSubPage] = useState(1);
+  const [subSearch, setSubSearch] = useState('');
+  const [accumulatedSubs, setAccumulatedSubs] = useState<Subcategory[]>([]);
+
+  const { data: subPageData, isFetching: subsFetching } = usePaginatedSubcategories(
+    categoryId ? {
+      category_id: categoryId,
+      page: subPage,
+      page_size: 5,
+      search: subSearch || undefined,
+    } : undefined
   );
+
+  useEffect(() => {
+    setSubPage(1);
+    setSubSearch('');
+    setAccumulatedSubs([]);
+  }, [categoryId]);
+
+  useEffect(() => {
+    if (subPageData?.results) {
+      if (subPage === 1) {
+        setAccumulatedSubs(subPageData.results);
+      } else {
+        setAccumulatedSubs((prev) => {
+          const ids = new Set(prev.map((s) => s.id));
+          const newItems = subPageData.results.filter((s) => !ids.has(s.id));
+          return [...prev, ...newItems];
+        });
+      }
+    }
+  }, [subPageData, subPage]);
 
   // Inline Subcategory Creation Modal State
   const [newSubModalOpen, setNewSubModalOpen] = useState(false);
@@ -401,15 +457,22 @@ function ProductDrawerForm({
             nothingFoundMessage="No categories found"
           />
 
-          <Select
+          <PaginatedSelect
             label="Brand"
-            placeholder={brands?.length ? 'Select brand' : 'No brands created for this org'}
-            data={brands?.map((b) => ({ value: b.id, label: b.name })) || []}
+            placeholder={accumulatedBrands?.length ? 'Select brand' : 'No brands created for this org'}
+            options={accumulatedBrands?.map((b) => ({ value: b.id, label: b.name })) || []}
             value={brandId}
             onChange={setBrandId}
             clearable={!isReadOnly}
             searchable
             disabled={isReadOnly}
+            hasMore={Boolean(brandPageData && brandPage < brandPageData.total_pages)}
+            isLoadingMore={brandsFetching}
+            onLoadMore={() => setBrandPage((p) => p + 1)}
+            onSearchChange={(q) => {
+              setBrandSearch(q);
+              setBrandPage(1);
+            }}
           />
         </SimpleGrid>
 
@@ -431,20 +494,27 @@ function ProductDrawerForm({
               </Button>
             )}
           </Group>
-          <Select
+          <PaginatedSelect
             placeholder={
               !categoryId
                 ? 'Select a platform category first'
-                : subcategories?.length
+                : accumulatedSubs?.length
                 ? 'Select subcategory (e.g. Jeans, Juices)'
                 : 'No subcategories yet — click + New Subcategory'
             }
-            data={subcategories?.map((s) => ({ value: s.id, label: s.name })) || []}
+            options={accumulatedSubs?.map((s) => ({ value: s.id, label: s.name })) || []}
             value={subcategoryId}
             onChange={setSubcategoryId}
             disabled={isReadOnly || !categoryId}
             clearable={!isReadOnly}
             searchable
+            hasMore={Boolean(subPageData && subPage < subPageData.total_pages)}
+            isLoadingMore={subsFetching}
+            onLoadMore={() => setSubPage((p) => p + 1)}
+            onSearchChange={(q) => {
+              setSubSearch(q);
+              setSubPage(1);
+            }}
           />
         </Box>
 
@@ -559,8 +629,8 @@ function ProductDrawerForm({
                     if (globalCatalogueMatch.description && !description) {
                       setDescription(globalCatalogueMatch.description);
                     }
-                    if (globalCatalogueMatch.brand_name && brands) {
-                      const matchedBrand = brands.find(
+                    if (globalCatalogueMatch.brand_name && allBrands) {
+                      const matchedBrand = allBrands.find(
                         (b) => b.name.toLowerCase() === globalCatalogueMatch.brand_name?.toLowerCase()
                       );
                       if (matchedBrand) setBrandId(matchedBrand.id);

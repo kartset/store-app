@@ -373,26 +373,28 @@ class MasterCatalogAPITests(TestCase):
         # 1. List all categories
         response = self.client.get('/api/products/categories/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(len(response.data), 2)
+        self.assertGreaterEqual(response.data['count'], 2)
+        self.assertGreaterEqual(len(response.data['results']), 2)
 
         # 2. Filter root categories
         response_root = self.client.get('/api/products/categories/?parent=null')
         self.assertEqual(response_root.status_code, status.HTTP_200_OK)
-        root_ids = [c['id'] for c in response_root.data]
+        root_ids = [c['id'] for c in response_root.data['results']]
         self.assertIn(str(self.cat_root.id), root_ids)
         self.assertNotIn(str(self.cat_child.id), root_ids)
 
         # 3. Filter children by parent
         response_child = self.client.get(f'/api/products/categories/?parent={self.cat_root.id}')
         self.assertEqual(response_child.status_code, status.HTTP_200_OK)
-        child_ids = [c['id'] for c in response_child.data]
+        child_ids = [c['id'] for c in response_child.data['results']]
         self.assertIn(str(self.cat_child.id), child_ids)
 
         # 4. Search categories
         response_search = self.client.get('/api/products/categories/?search=Beverages')
         self.assertEqual(response_search.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response_search.data), 1)
-        self.assertEqual(response_search.data[0]['name'], 'Beverages')
+        self.assertEqual(response_search.data['count'], 1)
+        self.assertEqual(len(response_search.data['results']), 1)
+        self.assertEqual(response_search.data['results'][0]['name'], 'Beverages')
 
     def test_category_tree_endpoint(self):
         response = self.client.get('/api/products/categories/tree/')
@@ -432,7 +434,8 @@ class MasterCatalogAPITests(TestCase):
         # Query adopted categories
         get_resp = self.client.get(f'/api/products/organization-categories/?organization_id={self.org_1.id}')
         self.assertEqual(get_resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(get_resp.data), 2)
+        self.assertEqual(get_resp.data['count'], 2)
+        self.assertEqual(len(get_resp.data['results']), 2)
 
     def test_store_category_bulk_map(self):
         payload = {
@@ -446,7 +449,8 @@ class MasterCatalogAPITests(TestCase):
         # Query mapped categories
         get_resp = self.client.get(f'/api/products/store-categories/?store_id={self.store.id}')
         self.assertEqual(get_resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(get_resp.data), 1)
+        self.assertEqual(get_resp.data['count'], 1)
+        self.assertEqual(len(get_resp.data['results']), 1)
 
     def test_brand_api_crud_and_duplicate_validation(self):
         # Create Brand
@@ -466,7 +470,8 @@ class MasterCatalogAPITests(TestCase):
         # Filter brands by org and search
         search_resp = self.client.get(f'/api/products/brands/?organization_id={self.org_1.id}&search=nestle')
         self.assertEqual(search_resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(search_resp.data), 1)
+        self.assertEqual(search_resp.data['count'], 1)
+        self.assertEqual(len(search_resp.data['results']), 1)
 
     def test_product_api_create_and_validation(self):
         payload = {
@@ -534,25 +539,29 @@ class MasterCatalogAPITests(TestCase):
         # Filter by org
         resp_org = self.client.get(f'/api/products/?organization_id={self.org_1.id}')
         self.assertEqual(resp_org.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp_org.data), 2)
+        self.assertEqual(resp_org.data['count'], 2)
+        self.assertEqual(len(resp_org.data['results']), 2)
 
         # Filter by category
         resp_cat = self.client.get(f'/api/products/?category_id={self.cat_child.id}')
         self.assertEqual(resp_cat.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp_cat.data), 1)
-        self.assertEqual(resp_cat.data[0]['id'], str(p1.id))
+        self.assertEqual(resp_cat.data['count'], 1)
+        self.assertEqual(len(resp_cat.data['results']), 1)
+        self.assertEqual(resp_cat.data['results'][0]['id'], str(p1.id))
 
         # Filter by active
         resp_active = self.client.get('/api/products/?is_active=true')
         self.assertEqual(resp_active.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp_active.data), 1)
-        self.assertEqual(resp_active.data[0]['id'], str(p1.id))
+        self.assertEqual(resp_active.data['count'], 1)
+        self.assertEqual(len(resp_active.data['results']), 1)
+        self.assertEqual(resp_active.data['results'][0]['id'], str(p1.id))
 
         # Search by barcode
         resp_search = self.client.get('/api/products/?search=SC-998877')
         self.assertEqual(resp_search.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp_search.data), 1)
-        self.assertEqual(resp_search.data[0]['id'], str(p1.id))
+        self.assertEqual(resp_search.data['count'], 1)
+        self.assertEqual(len(resp_search.data['results']), 1)
+        self.assertEqual(resp_search.data['results'][0]['id'], str(p1.id))
 
     def test_barcode_lookup_view_speed_and_resolution(self):
         p = Product.objects.create(
@@ -691,7 +700,8 @@ class MasterCatalogAPITests(TestCase):
             f'/api/products/subcategories/?organization_id={self.org_1.id}&category_id={self.cat_child.id}'
         )
         self.assertEqual(filter_resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(filter_resp.data), 1)
+        self.assertEqual(filter_resp.data['count'], 1)
+        self.assertEqual(len(filter_resp.data['results']), 1)
 
         # 4. Update subcategory
         patch_resp = self.client.patch(
@@ -855,21 +865,21 @@ class MasterCatalogAPITests(TestCase):
         # 4. List Brands without organization_id query param
         brand_list_resp = self.client.get('/api/products/brands/')
         self.assertEqual(brand_list_resp.status_code, status.HTTP_200_OK)
-        brand_names = [b['name'] for b in brand_list_resp.data]
+        brand_names = [b['name'] for b in brand_list_resp.data['results']]
         self.assertIn('Server Scoped Brand', brand_names)
         self.assertNotIn('Org2 Brand', brand_names)
 
         # 5. List Subcategories without organization_id query param
         sub_list_resp = self.client.get('/api/products/subcategories/')
         self.assertEqual(sub_list_resp.status_code, status.HTTP_200_OK)
-        sub_names = [s['name'] for s in sub_list_resp.data]
+        sub_names = [s['name'] for s in sub_list_resp.data['results']]
         self.assertIn('Server Scoped Subcategory', sub_names)
         self.assertNotIn('Org2 Subcategory', sub_names)
 
         # 6. List Products without organization_id query param
         prod_list_resp = self.client.get('/api/products/')
         self.assertEqual(prod_list_resp.status_code, status.HTTP_200_OK)
-        prod_skus = [p['sku'] for p in prod_list_resp.data]
+        prod_skus = [p['sku'] for p in prod_list_resp.data['results']]
         self.assertIn('SKU-SRV-01', prod_skus)
         self.assertNotIn('SKU-ORG2-ISO', prod_skus)
 

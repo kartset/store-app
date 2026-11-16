@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../lib/axios';
+import type { PaginatedResponse, PaginationParams } from '../../../types/pagination';
 import type {
   AdjustStockPayload,
   InventoryItem,
@@ -8,7 +9,7 @@ import type {
   StockMovement,
 } from '../types';
 
-export interface InventoryFilterParams {
+export interface InventoryFilterParams extends PaginationParams {
   store_id?: string;
   product_id?: string;
   is_low_stock?: boolean;
@@ -16,21 +17,47 @@ export interface InventoryFilterParams {
   search?: string;
 }
 
-export function useInventory(params?: InventoryFilterParams) {
+export function usePaginatedInventory(params?: InventoryFilterParams) {
   return useQuery({
-    queryKey: ['inventory', params],
+    queryKey: ['inventory', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.store_id) queryParams.store_id = params.store_id;
       if (params?.product_id) queryParams.product_id = params.product_id;
       if (params?.is_low_stock !== undefined) queryParams.is_low_stock = String(params.is_low_stock);
       if (params?.is_out_of_stock !== undefined) queryParams.is_out_of_stock = String(params.is_out_of_stock);
       if (params?.search) queryParams.search = params.search;
 
-      const response = await api.get<InventoryItem[]>('/api/inventory/', {
+      const response = await api.get<PaginatedResponse<InventoryItem>>('/api/inventory/', {
         params: queryParams,
       });
       return response.data;
+    },
+    enabled: Boolean(params?.store_id),
+  });
+}
+
+export function useInventory(params?: InventoryFilterParams) {
+  return useQuery({
+    queryKey: ['inventory', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = { page_size: '100' };
+      if (params?.store_id) queryParams.store_id = params.store_id;
+      if (params?.product_id) queryParams.product_id = params.product_id;
+      if (params?.is_low_stock !== undefined) queryParams.is_low_stock = String(params.is_low_stock);
+      if (params?.is_out_of_stock !== undefined) queryParams.is_out_of_stock = String(params.is_out_of_stock);
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<PaginatedResponse<InventoryItem> | InventoryItem[]>('/api/inventory/', {
+        params: queryParams,
+      });
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return response.data.results || [];
     },
     enabled: Boolean(params?.store_id),
   });

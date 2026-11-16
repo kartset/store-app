@@ -38,11 +38,12 @@ import {
   IconCircleCheck,
 } from '@tabler/icons-react';
 import {
-  useDeliveries,
+  usePaginatedDeliveries,
   useDeliveryPipelineSummary,
   useDispatchDelivery,
   useUpdateDeliveryStatus,
 } from '../api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import { useStores } from '../../stores/api';
 import { AssignDriverModal } from './AssignDriverModal';
 import { VerifyOTPModal } from './VerifyOTPModal';
@@ -78,18 +79,24 @@ export function DeliveryList() {
     return undefined; // We'll filter FAILED_RETURNED locally or by query
   }, [activeTab]);
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
   const {
-    data: deliveries = [],
+    data: paginatedData,
     isLoading,
     refetch,
     isRefetching,
-  } = useDeliveries({
+  } = usePaginatedDeliveries({
+    page,
+    page_size: pageSize,
     store_id: selectedStore || undefined,
     status: statusParam,
     delivery_type: deliveryTypeFilter || undefined,
     search: search.trim() || undefined,
   });
 
+  const deliveries = paginatedData?.results || [];
   const { data: summary } = useDeliveryPipelineSummary(selectedStore || undefined);
 
   const dispatchMutation = useDispatchDelivery();
@@ -249,7 +256,13 @@ export function DeliveryList() {
       <Paper withBorder radius="md" p="md" style={{ backgroundColor: 'var(--bg-surface)' }}>
         <Stack gap="md">
           {/* Operations Pipeline Tabs */}
-          <Tabs value={activeTab} onChange={(val) => setActiveTab(val || 'ALL')}>
+          <Tabs
+            value={activeTab}
+            onChange={(val) => {
+              setActiveTab(val || 'ALL');
+              setPage(1);
+            }}
+          >
             <Tabs.List>
               <Tabs.Tab value="ALL" leftSection={<IconTruckDelivery size={16} />}>
                 All Shipments ({summary?.total ?? 0})
@@ -276,7 +289,10 @@ export function DeliveryList() {
                 placeholder="Search tracking ID, recipient, phone, or driver..."
                 leftSection={<IconSearch size={16} />}
                 value={search}
-                onChange={(e) => setSearch(e.currentTarget.value)}
+                onChange={(e) => {
+                  setSearch(e.currentTarget.value);
+                  setPage(1);
+                }}
                 style={{ minWidth: '280px', flexGrow: 1 }}
               />
 
@@ -287,7 +303,10 @@ export function DeliveryList() {
                   ...stores.map((s) => ({ value: s.id, label: s.name })),
                 ]}
                 value={selectedStore}
-                onChange={(val) => setSelectedStore(val || '')}
+                onChange={(val) => {
+                  setSelectedStore(val || '');
+                  setPage(1);
+                }}
                 style={{ width: '180px' }}
                 clearable
               />
@@ -305,7 +324,10 @@ export function DeliveryList() {
                   { value: 'OTHER', label: 'Other Third Party' },
                 ]}
                 value={deliveryTypeFilter}
-                onChange={(val) => setDeliveryTypeFilter(val || '')}
+                onChange={(val) => {
+                  setDeliveryTypeFilter(val || '');
+                  setPage(1);
+                }}
                 style={{ width: '180px' }}
                 clearable
               />
@@ -566,6 +588,16 @@ export function DeliveryList() {
               </Table>
             </Table.ScrollContainer>
           )}
+
+          <TablePagination
+            page={page}
+            pageSize={pageSize}
+            totalCount={paginatedData?.count ?? 0}
+            totalPages={paginatedData?.total_pages ?? 1}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            disabled={isLoading}
+          />
         </Stack>
       </Paper>
 

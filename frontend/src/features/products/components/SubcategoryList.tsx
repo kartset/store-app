@@ -38,13 +38,14 @@ import {
 } from '@tabler/icons-react';
 import { useState, useMemo } from 'react';
 import {
-  useSubcategories,
+  usePaginatedSubcategories,
   useCategories,
   useOrganizationCategories,
   useCreateSubcategory,
   useUpdateSubcategory,
   useDeleteSubcategory,
 } from '../api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import type { Subcategory } from '../types';
 
 export function SubcategoryList() {
@@ -107,56 +108,40 @@ export function SubcategoryList() {
     return [];
   }, [orgCategories, platformCategories]);
 
-  // Fetch subcategories
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
+  // Fetch paginated subcategories
   const {
-    data: subcategories,
+    data: paginatedData,
     isLoading: subcategoriesLoading,
     error,
-  } = useSubcategories();
+  } = usePaginatedSubcategories({
+    page,
+    page_size: pageSize,
+    category_id: selectedCategoryId !== 'all' ? selectedCategoryId : undefined,
+    is_active: statusFilter === 'all' ? undefined : statusFilter === 'active',
+    search: searchQuery.trim() || undefined,
+  });
+
+  const filteredSubcategories = paginatedData?.results || [];
 
   // Mutations
   const createMutation = useCreateSubcategory();
   const updateMutation = useUpdateSubcategory();
   const deleteMutation = useDeleteSubcategory();
 
-  // Filtered subcategories
-  const filteredSubcategories = useMemo(() => {
-    if (!subcategories) return [];
-    return subcategories.filter((sub) => {
-      // Platform category filter
-      if (selectedCategoryId !== 'all' && sub.category_id !== selectedCategoryId) {
-        return false;
-      }
-      // Status filter
-      if (statusFilter === 'active' && !sub.is_active) return false;
-      if (statusFilter === 'inactive' && sub.is_active) return false;
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = sub.name.toLowerCase().includes(q);
-        const matchesSlug = sub.slug?.toLowerCase().includes(q);
-        const matchesDesc = sub.description?.toLowerCase().includes(q);
-        const matchesCategory = sub.category?.name.toLowerCase().includes(q);
-        if (!matchesName && !matchesSlug && !matchesDesc && !matchesCategory) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [subcategories, selectedCategoryId, statusFilter, searchQuery]);
-
   // Statistics
   const stats = useMemo(() => {
-    if (!subcategories) return { total: 0, active: 0, categoriesMapped: 0 };
-    const total = subcategories.length;
-    const active = subcategories.filter((s) => s.is_active).length;
-    const categoryIds = new Set(subcategories.map((s) => s.category_id));
+    const total = paginatedData?.count ?? 0;
+    const active = filteredSubcategories.filter((s) => s.is_active).length;
+    const categoryIds = new Set(filteredSubcategories.map((s) => s.category_id));
     return {
       total,
       active,
       categoriesMapped: categoryIds.size,
     };
-  }, [subcategories]);
+  }, [paginatedData, filteredSubcategories]);
 
   // Open Create Modal
   const handleOpenCreateModal = () => {
@@ -418,7 +403,10 @@ export function SubcategoryList() {
               placeholder="Search by subcategory name, slug, description..."
               leftSection={<IconSearch size={16} />}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.currentTarget.value)}
+              onChange={(e) => {
+                setSearchQuery(e.currentTarget.value);
+                setPage(1);
+              }}
               style={{ flex: 1, minWidth: 260 }}
             />
 
@@ -431,7 +419,10 @@ export function SubcategoryList() {
                 ...mappedCategories.map((c) => ({ value: c.id, label: c.name })),
               ]}
               value={selectedCategoryId}
-              onChange={(val) => setSelectedCategoryId(val || 'all')}
+              onChange={(val) => {
+                setSelectedCategoryId(val || 'all');
+                setPage(1);
+              }}
               w={240}
             />
           </Group>
@@ -440,7 +431,10 @@ export function SubcategoryList() {
           <SegmentedControl
             size="sm"
             value={statusFilter}
-            onChange={(val) => setStatusFilter(val as any)}
+            onChange={(val) => {
+              setStatusFilter(val as any);
+              setPage(1);
+            }}
             data={[
               { label: 'All', value: 'all' },
               { label: 'Active', value: 'active' },
@@ -594,6 +588,16 @@ export function SubcategoryList() {
             </Table>
           </Table.ScrollContainer>
         )}
+
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          totalCount={paginatedData?.count ?? 0}
+          totalPages={paginatedData?.total_pages ?? 1}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          disabled={subcategoriesLoading}
+        />
       </Card>
 
       {/* Create / Edit Subcategory Modal */}

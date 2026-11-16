@@ -1,3 +1,5 @@
+import type { PaginationParams } from '../../types/pagination';
+
 export type CustomerType = 'RETAIL' | 'B2B';
 
 export interface StoreCustomerMapping {
@@ -69,7 +71,7 @@ export interface CreateCustomerInput {
 
 export type UpdateCustomerInput = Partial<CreateCustomerInput>;
 
-export interface CustomerFilterParams {
+export interface CustomerFilterParams extends PaginationParams {
   search?: string;
   customer_type?: CustomerType | '';
   is_active?: boolean;
