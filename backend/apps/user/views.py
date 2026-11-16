@@ -1,5 +1,5 @@
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .serializers import (
     AppTokenObtainPairSerializer,
     AppTokenRefreshSerializer,
+    ChangePasswordSerializer,
     GoogleAuthSerializer,
     OnboardOrganizationSerializer,
 )
@@ -46,3 +47,21 @@ class OnboardOrganizationView(APIView):
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
         return Response(result, status=status.HTTP_201_CREATED)
+
+
+class ChangePasswordView(APIView):
+    """
+    Endpoint for authenticated users to change their password.
+    Clears the must_change_password flag upon successful password update.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response({
+            "detail": "Password updated successfully.",
+            "must_change_password": user.must_change_password
+        }, status=status.HTTP_200_OK)
+

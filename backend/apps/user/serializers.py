@@ -13,6 +13,7 @@ class UserSerializer(BaseModelSerializer):
             'first_name',
             'last_name',
             'is_active',
+            'must_change_password',
             'last_login',
             'created_at',
             'updated_at',
@@ -132,6 +133,7 @@ def build_auth_payload(user, target_store_id=None):
             'stores': stores_data,
             'organizations': orgs_data,
             'is_org_admin': is_org_admin,
+            'must_change_password': getattr(user, 'must_change_password', False),
         }
     }
 
@@ -279,6 +281,7 @@ class AppTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'stores': stores_data,
                 'organizations': orgs_data,
                 'is_org_admin': is_org_admin,
+                'must_change_password': getattr(self.user, 'must_change_password', False),
             }
         }
 
@@ -574,6 +577,31 @@ class OnboardOrganizationSerializer(serializers.Serializer):
                 'gst_number': store.gst_number,
             }
             return auth_payload
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, min_length=8)
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Current password is incorrect.")
+        return value
+
+    def validate_new_password(self, value):
+        user = self.context['request'].user
+        if user.check_password(value):
+            raise serializers.ValidationError("New password cannot be the same as the old password.")
+        return value
+
+    def save(self):
+        user = self.context['request'].user
+        user.set_password(self.validated_data['new_password'])
+        user.must_change_password = False
+        user.save()
+        return user
+
 
 
 

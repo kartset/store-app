@@ -31,10 +31,12 @@ import {
   IconChartBar,
   IconDatabaseImport,
   IconReceiptTax,
+  IconUserCheck,
 } from '@tabler/icons-react';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { CopilotDrawer, useCopilotStore } from '../../features/copilot';
+import { MustChangePasswordModal } from '../../features/auth/components/MustChangePasswordModal';
 
 export function DashboardLayout() {
   const [opened, { toggle }] = useDisclosure();
@@ -83,6 +85,10 @@ export function DashboardLayout() {
     if (user.organizations?.some((org: any) => org.role === 'ORG_ADMIN')) return true;
     return false;
   }, [user, currentStore]);
+
+  const [mustChangePasswordOpen, setMustChangePasswordOpen] = useState(
+    Boolean(user?.must_change_password)
+  );
 
   return (
     <AppShell
@@ -558,6 +564,30 @@ export function DashboardLayout() {
 
             {isOrgAdmin && (
               <NavLink
+                label="Staff & Users"
+                description="Manage store & org staff"
+                leftSection={
+                  <ThemeIcon
+                    size={28}
+                    radius="md"
+                    color={location.pathname === '/staff' ? 'brand' : 'gray'}
+                    variant={location.pathname === '/staff' ? 'filled' : 'light'}
+                  >
+                    <IconUserCheck size={16} />
+                  </ThemeIcon>
+                }
+                onClick={() => navigate('/staff')}
+                active={location.pathname === '/staff'}
+                style={{
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                }}
+              />
+            )}
+
+            {isOrgAdmin && (
+              <NavLink
                 label="Subcategories"
                 description="Custom taxonomy & groups"
                 leftSection={
@@ -636,6 +666,12 @@ export function DashboardLayout() {
 
       {/* Global AI Copilot Floating Drawer */}
       <CopilotDrawer />
+
+      {/* Mandatory First-Login Password Change Gate */}
+      <MustChangePasswordModal
+        opened={mustChangePasswordOpen}
+        onSuccess={() => setMustChangePasswordOpen(false)}
+      />
     </AppShell>
   );
 }

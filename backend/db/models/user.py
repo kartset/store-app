@@ -23,6 +23,7 @@ class User(BaseModel, AbstractBaseUser):
     first_name = models.CharField(max_length=150, blank=True)
     last_name = models.CharField(max_length=150, blank=True)
     is_active = models.BooleanField(default=True)
+    must_change_password = models.BooleanField(default=False)
 
     objects = UserManager()
 

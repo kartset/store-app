@@ -432,6 +432,54 @@ class GoogleAuthAndOnboardingTests(TestCase):
         self.assertEqual(login_res.data['user']['email'], owner_email)
         self.assertEqual(login_res.data['user']['current_store']['name'], 'Vance Central')
         self.assertTrue(login_res.data['user']['is_org_admin'])
+        self.assertFalse(login_res.data['user']['must_change_password'])
+
+
+class ChangePasswordEndpointTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('change_password')
+        self.user = User.objects.create_user(
+            email='newstaff@store.com',
+            password='InitialPassword123!',
+            first_name='John',
+            last_name='Staff',
+            is_active=True,
+            must_change_password=True,
+        )
+        self.org = Organization.objects.create(name='Staff Org', subdomain='staff-org')
+        self.store = Store.objects.create(organization_id=self.org, name='Staff Store', is_active=True)
+        StoreStaff.objects.create(user_id=self.user, store_id=self.store, role='CASHIER')
+        self.client.force_authenticate(user=self.user)
+
+    def test_change_password_success(self):
+        res = self.client.post(self.url, {
+            'old_password': 'InitialPassword123!',
+            'new_password': 'UpdatedPassword999!',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['must_change_password'])
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('UpdatedPassword999!'))
+        self.assertFalse(self.user.must_change_password)
+
+    def test_change_password_wrong_old_password(self):
+        res = self.client.post(self.url, {
+            'old_password': 'WrongPassword!',
+            'new_password': 'UpdatedPassword999!',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('old_password', res.data)
+
+    def test_change_password_same_password_rejected(self):
+        res = self.client.post(self.url, {
+            'old_password': 'InitialPassword123!',
+            'new_password': 'InitialPassword123!',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('new_password', res.data)
+
 
 
 
