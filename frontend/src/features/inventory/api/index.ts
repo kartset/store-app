@@ -77,7 +77,7 @@ export function useInventorySummary(storeId?: string) {
   });
 }
 
-export interface StockMovementFilterParams {
+export interface StockMovementFilterParams extends PaginationParams {
   store_id?: string;
   product_id?: string;
   vendor_id?: string;
@@ -88,11 +88,17 @@ export interface StockMovementFilterParams {
   search?: string;
 }
 
-export function useStockMovements(params?: StockMovementFilterParams) {
+export function usePaginatedStockMovements(
+  params?: StockMovementFilterParams,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
-    queryKey: ['stock-movements', params],
+    queryKey: ['stock-movements', 'paginated', params],
     queryFn: async () => {
-      const queryParams: Record<string, string> = {};
+      const queryParams: Record<string, any> = {
+        page: params?.page ?? 1,
+        page_size: params?.page_size ?? 5,
+      };
       if (params?.store_id) queryParams.store_id = params.store_id;
       if (params?.product_id) queryParams.product_id = params.product_id;
       if (params?.vendor_id) queryParams.vendor_id = params.vendor_id;
@@ -102,11 +108,44 @@ export function useStockMovements(params?: StockMovementFilterParams) {
       if (params?.end_date) queryParams.end_date = params.end_date;
       if (params?.search) queryParams.search = params.search;
 
-      const response = await api.get<StockMovement[]>('/api/inventory/movements/', {
+      const response = await api.get<PaginatedResponse<StockMovement>>('/api/inventory/movements/', {
         params: queryParams,
       });
       return response.data;
     },
+    enabled: options?.enabled !== false,
+  });
+}
+
+export function useStockMovements(
+  params?: StockMovementFilterParams,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: ['stock-movements', params],
+    queryFn: async () => {
+      const queryParams: Record<string, string> = { page_size: '100' };
+      if (params?.store_id) queryParams.store_id = params.store_id;
+      if (params?.product_id) queryParams.product_id = params.product_id;
+      if (params?.vendor_id) queryParams.vendor_id = params.vendor_id;
+      if (params?.movement_type) queryParams.movement_type = params.movement_type;
+      if (params?.reference_id) queryParams.reference_id = params.reference_id;
+      if (params?.start_date) queryParams.start_date = params.start_date;
+      if (params?.end_date) queryParams.end_date = params.end_date;
+      if (params?.search) queryParams.search = params.search;
+
+      const response = await api.get<PaginatedResponse<StockMovement> | StockMovement[]>(
+        '/api/inventory/movements/',
+        {
+          params: queryParams,
+        }
+      );
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return response.data.results || [];
+    },
+    enabled: options?.enabled !== false,
   });
 }
 

@@ -11,6 +11,7 @@ import {
   Loader,
   Center,
   ThemeIcon,
+  Box,
 } from '@mantine/core';
 import {
   IconHistory,
@@ -20,9 +21,10 @@ import {
   IconArrowsExchange,
   IconTruckDelivery,
 } from '@tabler/icons-react';
-import { useState, useMemo } from 'react';
-import { useStockMovements } from '../api';
+import { useState, useMemo, useEffect } from 'react';
+import { usePaginatedStockMovements } from '../api';
 import { useVendors } from '../../vendors/api';
+import { TablePagination } from '../../../components/common/TablePagination';
 import type { StockMovementType } from '../types';
 
 interface StockMovementsDrawerProps {
@@ -77,6 +79,15 @@ export function StockMovementsDrawer({
   const [selectedVendorId, setSelectedVendorId] = useState<string>('');
   const [search, setSearch] = useState<string>('');
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
+  // Reset pagination when drawer opens or filters change
+  useEffect(() => {
+    setPage(1);
+  }, [opened, productId, selectedType, selectedVendorId]);
+
   const { data: vendors } = useVendors(
     organizationId ? { organization_id: organizationId, is_active: true } : undefined
   );
@@ -92,13 +103,20 @@ export function StockMovementsDrawer({
     ];
   }, [vendors]);
 
-  const { data: movements, isLoading } = useStockMovements({
-    store_id: storeId,
-    product_id: productId,
-    vendor_id: selectedVendorId || undefined,
-    movement_type: selectedType || undefined,
-    search: search.trim() || undefined,
-  });
+  const { data: paginatedData, isLoading } = usePaginatedStockMovements(
+    {
+      page,
+      page_size: pageSize,
+      store_id: storeId,
+      product_id: productId,
+      vendor_id: selectedVendorId || undefined,
+      movement_type: selectedType || undefined,
+      search: search.trim() || undefined,
+    },
+    { enabled: opened && Boolean(storeId) }
+  );
+
+  const movements = paginatedData?.results || [];
 
   return (
     <Drawer
@@ -128,14 +146,20 @@ export function StockMovementsDrawer({
             placeholder="Search by reason, ref #, or SKU..."
             leftSection={<IconSearch size={14} />}
             value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
+            onChange={(e) => {
+              setSearch(e.currentTarget.value);
+              setPage(1);
+            }}
             size="sm"
           />
           <Select
             placeholder="Filter by type..."
             data={MOVEMENT_TYPE_FILTER_OPTIONS}
             value={selectedType}
-            onChange={(val) => setSelectedType(val || '')}
+            onChange={(val) => {
+              setSelectedType(val || '');
+              setPage(1);
+            }}
             size="sm"
             clearable
           />
@@ -145,7 +169,10 @@ export function StockMovementsDrawer({
               leftSection={<IconTruckDelivery size={14} />}
               data={vendorOptions}
               value={selectedVendorId}
-              onChange={(val) => setSelectedVendorId(val || '')}
+              onChange={(val) => {
+                setSelectedVendorId(val || '');
+                setPage(1);
+              }}
               size="sm"
               clearable
             />
@@ -259,6 +286,18 @@ export function StockMovementsDrawer({
                 })}
               </Table.Tbody>
             </Table>
+
+            <Box p="sm" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <TablePagination
+                page={page}
+                pageSize={pageSize}
+                totalCount={paginatedData?.count ?? 0}
+                totalPages={paginatedData?.total_pages ?? 1}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+                disabled={isLoading}
+              />
+            </Box>
           </Paper>
         )}
       </Stack>
