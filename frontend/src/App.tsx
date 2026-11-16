@@ -17,6 +17,7 @@ import { DataExchangeHub } from './features/data-exchange';
 import { DeliveryList } from './features/delivery';
 import { GSTDashboard } from './features/gst';
 import { AISettingsPage } from './features/copilot';
+import { StaffList } from './features/staff';
 
 function App() {
   return (
@@ -29,6 +30,8 @@ function App() {
         <Route index element={<Navigate to="/pos" replace />} />
         <Route path="organizations" element={<Navigate to="/pos" replace />} />
         <Route path="stores" element={<StoreList />} />
+        <Route path="staff" element={<StaffList />} />
+        <Route path="users" element={<Navigate to="/staff" replace />} />
         <Route path="products" element={<ProductList />} />
         <Route path="subcategories" element={<SubcategoryList />} />
         <Route path="inventory" element={<InventoryList />} />
