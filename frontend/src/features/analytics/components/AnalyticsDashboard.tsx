@@ -47,12 +47,57 @@ function formatDate(date: Date): string {
 }
 
 export function AnalyticsDashboard() {
+  const user = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const currentStore = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('current_store');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const isOrgAdmin = useMemo(() => {
+    if (!user) return false;
+    if (user.is_org_admin || user.role === 'ORG_ADMIN' || user.role === 'SUPER_ADMIN') return true;
+    if (currentStore?.role === 'ORG_ADMIN') return true;
+    if (user.organizations?.some((org: any) => org.role === 'ORG_ADMIN')) return true;
+    return false;
+  }, [user, currentStore]);
+
+  // Stores
+  const { data: stores = [] } = useStores();
+
   const [selectedStoreId, setSelectedStoreId] = useState<string>('all');
   const [datePreset, setDatePreset] = useState<string>('30d');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
   const [trendGranularity, setTrendGranularity] = useState<'day' | 'week' | 'month'>('day');
   const [productSortBy, setProductSortBy] = useState<'revenue' | 'units_sold'>('revenue');
+
+  // Derive active store ID based on user role and available stores
+  const effectiveStoreId = useMemo(() => {
+    if (!isOrgAdmin && stores.length > 0) {
+      if (currentStore?.id && stores.some((s) => s.id === currentStore.id)) {
+        return currentStore.id;
+      }
+      return stores[0].id;
+    }
+    if (selectedStoreId !== 'all' && stores.length > 0 && !stores.some((s) => s.id === selectedStoreId)) {
+      return 'all';
+    }
+    return selectedStoreId;
+  }, [isOrgAdmin, stores, currentStore, selectedStoreId]);
+
+  const activeStoreId = effectiveStoreId === 'all' ? undefined : effectiveStoreId;
 
   // Compute active start & end dates
   const { startDate, endDate } = useMemo(() => {
@@ -88,11 +133,6 @@ export function AnalyticsDashboard() {
     s.setDate(s.getDate() - 29);
     return { startDate: formatDate(s), endDate: formatDate(today) };
   }, [datePreset, customStart, customEnd]);
-
-  const activeStoreId = selectedStoreId === 'all' ? undefined : selectedStoreId;
-
-  // Stores
-  const { data: stores = [] } = useStores();
 
   // Analytics queries
   const filterParams = useMemo(
@@ -138,7 +178,7 @@ export function AnalyticsDashboard() {
 
     let csv = `RETAIL BUSINESS INTELLIGENCE REPORT\n`;
     csv += `Period: ${ov.period_start} to ${ov.period_end}\n`;
-    csv += `Store: ${selectedStoreId === 'all' ? 'All Outlets Combined' : selectedStoreId}\n\n`;
+    csv += `Store: ${effectiveStoreId === 'all' ? 'All Outlets Combined' : (stores.find((s) => s.id === effectiveStoreId)?.name || effectiveStoreId)}\n\n`;
 
     csv += `EXECUTIVE FINANCIAL KPIs\n`;
     csv += `Gross Sales,₹${ov.gross_sales}\n`;
@@ -187,10 +227,13 @@ export function AnalyticsDashboard() {
   };
 
   const storeOptions = useMemo(() => {
-    const list = [{ label: 'All Stores & Outlets', value: 'all' }];
+    const list: Array<{ label: string; value: string }> = [];
+    if (isOrgAdmin && stores.length > 1) {
+      list.push({ label: 'All Stores & Outlets', value: 'all' });
+    }
     stores.forEach((s) => list.push({ label: s.name, value: s.id }));
     return list;
-  }, [stores]);
+  }, [stores, isOrgAdmin]);
 
   return (
     <Container size="xxl" px="md" py="lg">
@@ -232,10 +275,11 @@ export function AnalyticsDashboard() {
               <Select
                 size="xs"
                 w={200}
-                value={selectedStoreId}
-                onChange={(val) => setSelectedStoreId(val || 'all')}
+                value={effectiveStoreId}
+                onChange={(val) => setSelectedStoreId(val || (isOrgAdmin && stores.length > 1 ? 'all' : stores[0]?.id || ''))}
                 data={storeOptions}
                 placeholder="Select Store"
+                disabled={!isOrgAdmin && stores.length <= 1}
                 comboboxProps={{ shadow: 'md', transitionProps: { transition: 'pop', duration: 150 } }}
               />
 

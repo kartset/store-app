@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -18,10 +19,13 @@ from db.models import (
     Order,
     OrderStatus,
     Organization,
+    OrganizationStaff,
     Payment,
     PaymentMethod,
     Product,
     Store,
+    StoreStaff,
+    User,
 )
 
 
@@ -29,6 +33,17 @@ class AnalyticsAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.org = Organization.objects.create(name='Analytics Retail Corp', subdomain='analytics')
+        self.user = User.objects.create_user(
+            email='admin@analytics.com', password='Password123!', first_name='Admin', last_name='User'
+        )
+        OrganizationStaff.objects.create(
+            user_id=self.user,
+            organization_id=self.org,
+            role='ORG_ADMIN',
+            is_active=True,
+        )
+        self.client.force_authenticate(user=self.user)
+
         self.store = Store.objects.create(
             organization_id=self.org,
             name='Indiranagar Megastore',
@@ -265,3 +280,101 @@ class AnalyticsAPITests(TestCase):
         # Valuation: 5 * 600 = 3000.00
         self.assertEqual(Decimal(data['valuation_retail']), Decimal('3000.00'))
         self.assertEqual(len(data['critical_items']), 1)
+
+    def test_unauthenticated_request_rejected(self):
+        """Verifies hitting analytics endpoints without credentials returns 401."""
+        self.client.force_authenticate(user=None)
+        res = self.client.get('/api/analytics/overview/')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_multi_tenant_analytics_isolation_and_idor_prevention(self):
+        """
+        Verifies that:
+        1. Org A Admin querying all stores (omitted store_id) does not aggregate Org B's metrics.
+        2. Org A Admin attempting to pass Org B's store_id receives 403 Forbidden.
+        """
+        org_b = Organization.objects.create(name='Competitor Retail Ltd', subdomain='competitor')
+        store_b = Store.objects.create(
+            organization_id=org_b,
+            name='Competitor Flagship Store',
+            gst_number='33CCCCC3333C1Z3',
+            is_active=True,
+        )
+        product_b = Product.objects.create(
+            organization_id=org_b,
+            category_id=self.category_beverages,
+            name='Competitor Energy Drink',
+            sku='CED-999',
+            base_mrp=Decimal('5000.00'),
+            tax_slab=Decimal('0.00'),
+        )
+        inv_b = Invoice.objects.create(
+            store_id=store_b,
+            customer_id=self.customer,
+            invoice_number='INV-COMP-001',
+            type=InvoiceType.POS,
+            status=InvoiceStatus.PAID,
+            subtotal=Decimal('5000.00'),
+            grand_total=Decimal('5000.00'),
+            created_at=timezone.now(),
+        )
+        InvoiceItem.objects.create(
+            invoice_id=inv_b,
+            product_id=product_b,
+            product_name_snapshot='Competitor Energy Drink',
+            sku_snapshot='CED-999',
+            quantity=1,
+            unit_price=Decimal('5000.00'),
+            taxable_amount=Decimal('5000.00'),
+            line_total=Decimal('5000.00'),
+        )
+
+        # 1. Querying without store_id as Org A Admin only sees Org A's gross sales (3100.00), not Org B's (5000.00)
+        res = self.client.get('/api/analytics/overview/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # Gross sales in setUp for store A is 3100.00 (two invoices: 1100 + 2000)
+        self.assertEqual(Decimal(res.data['gross_sales']), Decimal('3100.00'))
+
+        # 2. Org A Admin attempting to query Org B's store_id explicitly gets 403 Forbidden across all views
+        endpoints = [
+            '/api/analytics/overview/',
+            '/api/analytics/sales-trend/',
+            '/api/analytics/top-products/',
+            '/api/analytics/category-breakdown/',
+            '/api/analytics/hourly-footfall/',
+            '/api/analytics/payment-methods/',
+            '/api/analytics/inventory-health/',
+        ]
+        for ep in endpoints:
+            res_forbidden = self.client.get(f'{ep}?store_id={store_b.id}')
+            self.assertEqual(
+                res_forbidden.status_code,
+                status.HTTP_403_FORBIDDEN,
+                f"Expected 403 for endpoint {ep} when accessing another tenant's store",
+            )
+
+    def test_store_staff_analytics_scoping(self):
+        """
+        Verifies that:
+        1. Store Staff without store_id is auto-scoped to their assigned store.
+        2. Store Staff attempting to query an unassigned store gets 403 Forbidden.
+        """
+        staff_user = User.objects.create_user(
+            email='staff@analytics.com', password='Password123!', first_name='Store', last_name='Staff'
+        )
+        StoreStaff.objects.create(
+            user_id=staff_user,
+            store_id=self.store,
+            role='CASHIER',
+        )
+        self.client.force_authenticate(user=staff_user)
+
+        # 1. Querying without store_id resolves to assigned store (self.store)
+        res = self.client.get('/api/analytics/overview/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(res.data['gross_sales']), Decimal('3100.00'))
+
+        # 2. Querying unassigned store in the same organization (self.store2) gets 403
+        res_unassigned = self.client.get(f'/api/analytics/overview/?store_id={self.store2.id}')
+        self.assertEqual(res_unassigned.status_code, status.HTTP_403_FORBIDDEN)
+
