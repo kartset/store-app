@@ -11,9 +11,12 @@ echo "==> [Entrypoint] PostgreSQL is ready."
 echo "==> [Entrypoint] Checking and applying database migrations..."
 uv run manage.py migrate --noinput
 
-# Default to runserver if no command is passed
+echo "==> [Entrypoint] Collecting static files..."
+uv run manage.py collectstatic --noinput --clear || true
+
+# Default to gunicorn if no command is passed
 if [ $# -eq 0 ]; then
-  set -- uv run manage.py runserver 0.0.0.0:8000
+  set -- uv run gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 3 --threads 2 --timeout 60
 fi
 
 echo "==> [Entrypoint] Starting application: $@"
