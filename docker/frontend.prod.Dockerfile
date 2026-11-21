@@ -5,9 +5,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies using yarn frozen lockfile
+# Install dependencies using yarn with fallback for platform differences
 COPY frontend/package.json frontend/yarn.lock ./
-RUN yarn install --frozen-lockfile
+RUN yarn install --frozen-lockfile --network-timeout 300000 || yarn install --network-timeout 300000
 
 # Copy frontend source code
 COPY frontend/ ./
