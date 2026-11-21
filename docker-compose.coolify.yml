@@ -31,8 +31,9 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-store_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-store_db}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
-    ports:
-      - "8000:8000"
+    # No host ports - Coolify's Traefik proxy routes via FQDN configured in the UI
+    expose:
+      - "8000"
     networks:
       - store_network
 
@@ -45,8 +46,9 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      - "80:80"
+    # No host ports - Coolify's Traefik proxy routes via FQDN configured in the UI
+    expose:
+      - "80"
     networks:
       - store_network
 
@@ -60,8 +62,9 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      - "3000:3000"
+    # No host ports - Coolify's Traefik proxy routes via FQDN configured in the UI
+    expose:
+      - "3000"
     networks:
       - store_network
 
