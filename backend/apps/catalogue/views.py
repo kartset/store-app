@@ -10,12 +10,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.products.serializers import ProductSerializer
+from utils.tenant import get_user_organization
 from db.models import (
     CatalogueItem,
     Inventory,
     OrganizationStaff,
     Product,
     StockMovementType,
+    Store,
 )
 
 from .serializers import (
@@ -129,7 +131,21 @@ class CatalogueItemViewSet(viewsets.ModelViewSet):
         the organization to set cost price, selling price, categories, and custom SKU.
         """
         catalogue_item = self.get_object()
-        serializer = CatalogueItemAdoptSerializer(data=request.data)
+
+        # Prepare request payload and assign organization_id from user's active org if not explicitly supplied
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if not data.get('organization_id'):
+            user_org = get_user_organization(request.user)
+            if not user_org and data.get('store_id'):
+                try:
+                    store = Store.objects.get(id=data['store_id'], is_deleted=False)
+                    user_org = store.organization_id
+                except (Store.DoesNotExist, ValueError):
+                    pass
+            if user_org:
+                data['organization_id'] = str(user_org.id)
+
+        serializer = CatalogueItemAdoptSerializer(data=data)
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
@@ -237,7 +253,20 @@ class CatalogueItemViewSet(viewsets.ModelViewSet):
         """
         Adopts multiple Global Catalogue Items into an organization in a single batch.
         """
-        serializer = BulkAdoptSerializer(data=request.data)
+        # Prepare request payload and assign organization_id from user's active org if not explicitly supplied
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        if not data.get('organization_id'):
+            user_org = get_user_organization(request.user)
+            if not user_org and data.get('store_id'):
+                try:
+                    store = Store.objects.get(id=data['store_id'], is_deleted=False)
+                    user_org = store.organization_id
+                except (Store.DoesNotExist, ValueError):
+                    pass
+            if user_org:
+                data['organization_id'] = str(user_org.id)
+
+        serializer = BulkAdoptSerializer(data=data)
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data

@@ -260,6 +260,20 @@ class CatalogueItemAPITests(TestCase):
         self.assertEqual(product.organization_id, self.org)
         self.assertEqual(product.catalogue_item_id, self.item_coke)
 
+    def test_adopt_catalogue_item_auto_assigns_user_org(self):
+        """Adopting without organization_id in payload auto-assigns the user's active organization."""
+        payload = {
+            'cost_price': '32.50',
+            'base_mrp': '45.00',
+            'category_id': str(self.category.id),
+            'low_stock_threshold': 15
+        }
+        res = self.client.post(f'/api/catalogue/items/{self.item_coke.id}/adopt/', payload)
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data['product']['organization_id'], self.org.id)
+        product = Product.objects.get(id=res.data['product']['id'])
+        self.assertEqual(product.organization_id, self.org)
+
     def test_adopt_catalogue_item_with_store_inventory(self):
         """Adopting with store_id and initial_stock creates Inventory & StockMovement automatically."""
         payload = {

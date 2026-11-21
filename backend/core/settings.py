@@ -34,7 +34,12 @@ SECRET_KEY = os.environ.get(
 DEBUG = os.environ.get("DEBUG", "True").lower() in ("true", "1", "yes")
 
 allowed_hosts_env = os.environ.get("ALLOWED_HOSTS", "*")
-ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_env.split(",") if h.strip()] or ["*"]
+parsed_hosts = [h.strip() for h in allowed_hosts_env.split(",") if h.strip()]
+if "*" not in parsed_hosts:
+    for local_host in ("127.0.0.1", "localhost"):
+        if local_host not in parsed_hosts:
+            parsed_hosts.append(local_host)
+ALLOWED_HOSTS = parsed_hosts or ["*"]
 
 
 # Application definition
