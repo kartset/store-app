@@ -128,7 +128,7 @@ erDiagram
         uuid subcategory_id FK
         uuid brand_id FK
         string name
-        string sku UK_per_org
+        string sku UK "Per-organization unique"
         string barcode "Universal EAN-13"
         string internal_barcode "Store thermal sticker STK-XXXXXX"
         string hsn_code
