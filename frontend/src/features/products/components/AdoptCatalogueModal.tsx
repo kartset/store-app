@@ -68,6 +68,27 @@ export function AdoptCatalogueModal({
   const [adoptSuccessMsg, setAdoptSuccessMsg] = useState<string | null>(null);
   const [adoptErrorMsg, setAdoptErrorMsg] = useState<string | null>(null);
 
+  // Auto-resolve organization ID from props, current active store, or user session
+  const effectiveOrgId = useMemo(() => {
+    if (organizationId) return organizationId;
+    try {
+      const storedStore = localStorage.getItem('current_store');
+      const parsedStore = storedStore ? JSON.parse(storedStore) : null;
+      if (parsedStore?.organization_id) return parsedStore.organization_id;
+
+      const storedUser = localStorage.getItem('user');
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      return (
+        parsedUser?.organization_id ||
+        parsedUser?.organization?.id ||
+        parsedUser?.organizations?.[0]?.id ||
+        ''
+      );
+    } catch {
+      return '';
+    }
+  }, [organizationId]);
+
   // Adoption Form State
   const [costPrice, setCostPrice] = useState<number>(0);
   const [baseMrp, setBaseMrp] = useState<number>(0);
@@ -166,7 +187,7 @@ export function AdoptCatalogueModal({
     setAdoptSuccessMsg(null);
 
     const payload: AdoptCataloguePayload = {
-      ...(organizationId ? { organization_id: organizationId } : {}),
+      ...(effectiveOrgId ? { organization_id: effectiveOrgId } : {}),
       cost_price: costPrice,
       base_mrp: baseMrp,
       category_id: categoryId || null,

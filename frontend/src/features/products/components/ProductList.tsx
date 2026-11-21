@@ -756,6 +756,12 @@ export function ProductList() {
       <AdoptCatalogueModal
         opened={adoptModalOpened}
         onClose={() => setAdoptModalOpened(false)}
+        organizationId={
+          currentStore?.organization_id ||
+          user?.organization_id ||
+          user?.organization?.id ||
+          user?.organizations?.[0]?.id
+        }
         storeId={currentStore?.id}
       />
 
