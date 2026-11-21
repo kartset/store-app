@@ -12,6 +12,7 @@ COPY backend/pyproject.toml backend/uv.lock /app/backend/
 
 # Configure isolated virtual environment
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
@@ -34,4 +35,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://127.0.0.1:8080/health || exit 1
 
-CMD ["uv", "run", "python", "server.py"]
+CMD ["python", "server.py"]
