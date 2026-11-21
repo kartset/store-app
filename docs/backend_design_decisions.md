@@ -113,4 +113,19 @@ This document outlines the core structural and architectural decisions made for 
   - **Zero-Key Offline Fallback Router:** When external API keys are not supplied, the server parses retail intent keywords and directly queries the Django ORM, returning structured Markdown tables and metrics without relying on cloud LLMs.
 - **Reason:** Standardizes AI interactions according to open industry specifications (MCP), prevents sensitive API keys from leaking into version control, guarantees tool schema accuracy, and ensures store managers can query real-time store metrics even during internet disruptions or in air-gapped retail environments.
 
+---
+
+## 16. Dedicated MCP Microservice & Client-Server Decoupling (`mcp/`)
+- **Decision:** The Model Context Protocol implementation is decoupled from the monolithic Django HTTP server into an isolated, standalone service in `mcp/` running the official Python SDK (`mcp` v2.3.0) and Server-Sent Events (`/sse`) transport on port `8080`.
+  - **Backend MCP Client (`MCPClient`):** The core Django backend connects to the MCP service via `MCPClient` (`MCP_SERVER_URL=http://mcp:8080`), delegating tool discovery and tool calling to the dedicated container with transparent, fault-tolerant fallback to local execution.
+  - **Unified Tool Catalog (12 Tools):** Consolidates 5 financial/BI analytics tools (`get_sales_kpis`, `get_sales_trajectory`, `get_top_selling_products`, `get_payment_method_breakdown`, `get_hourly_store_traffic`) and 7 operational retail tools (`search_products`, `check_inventory`, `get_daily_sales_summary`, `lookup_customer`, `get_gst_filing_summary`, `list_stores`, `lookup_order`).
+  - **Django ORM Reuse:** By bootstrapping Django settings within `mcp/server.py`, the MCP service queries existing `Invoice`, `Payment`, `Inventory`, and `Product` models without code duplication.
+- **Reason:** Separates persistent, long-lived SSE streaming connections from standard request-response WSGI/ASGI web traffic, prevents AI tool execution loads from starving POS transactions, and enables external AI agents (Cursor, Claude Desktop, Antigravity) to directly connect over official MCP standards.
+
+---
+
+## 17. 100-Day Enterprise Retail Seeding Engine (`manage.py seed_demo_store`)
+- **Decision:** A comprehensive enterprise-grade demo data generation command is implemented in `backend/db/management/commands/seed_demo_store.py`. It simulates 100 continuous days of store operations with realistic date progressions: 100 register sessions, float balances, denomination cash drops, hundreds of invoices across payment tenders, double-entry inventory stock movements (GRN inwarding, sales depletions, damage adjustments), delivery dispatches with OTP authentications, and vendor sourcing agreements.
+- **Reason:** Enables instant, high-fidelity customer demonstrations, pre-deployment staging validation, and stress-testing of analytics aggregation pipelines without manual counter entry.
+
 
