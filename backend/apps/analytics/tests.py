@@ -447,4 +447,22 @@ class AnalyticsAPITests(TestCase):
             self.assertIn('percentage', pm)
             self.assertIn('label', pm)
 
+    def test_seed_demo_store_command(self):
+        """Verifies that seed_demo_store management command runs without errors."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        out = StringIO()
+        call_command(
+            'seed_demo_store',
+            org_id=str(self.org.id),
+            store_id=str(self.store.id),
+            days=3,
+            stdout=out
+        )
+        output = out.getvalue()
+        self.assertIn("Demo Seeding Completed Successfully!", output)
+        self.assertTrue(Invoice.objects.filter(store_id=self.store).count() >= 5)
+
+
 
