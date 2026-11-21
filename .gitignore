@@ -26,3 +26,5 @@ cdp-sdlc.code-workspace
 .gemini/
 __pycache__/
 *.pyc
+staticfiles/
+*.sqlite3

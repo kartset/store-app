@@ -162,3 +162,74 @@ cd frontend
 npm run build
 npm run lint
 ```
+
+---
+
+## 🚀 Production Deployment (Self-Hosted Coolify on Ubuntu VPS)
+
+This application is fully productionized with multi-stage Dockerfiles, Gunicorn WSGI, WhiteNoise static asset serving, and Nginx reverse proxying with Gzip compression.
+
+### 1. Architecture Overview
+
+- **Database:** Containerized PostgreSQL 15 with persistent local volume storage (`postgres_data`).
+- **Backend:** Python 3.12, Django 6.1 served via Gunicorn (3 workers, 2 threads) with WhiteNoise compressed manifests on internal port `8000`.
+- **Dashboard Frontend:** React 19 + Vite compiled into a static bundle and served via `nginx:alpine` with Gzip compression and SPA routing fallback on internal port `80`.
+- **Public Website:** Next.js 14 server-rendered portal running on internal port `3000`.
+- **Coolify / Traefik:** Orchestrates containers, SSL certificates via Let's Encrypt, and subdomain routing.
+
+### 2. VPS Requirements
+
+- **OS:** Ubuntu 22.04 LTS or Ubuntu 24.04 LTS (x86_64)
+- **Specs:** Minimum 2 vCPU, 4 GB RAM (e.g. DigitalOcean Basic Droplet or Hetzner Cloud CX22/CX32)
+- **Network:** Inbound ports `80` (HTTP), `443` (HTTPS), `8000` (Coolify Dashboard), and `22` (SSH) open.
+
+### 3. Step-by-Step Deployment Runbook
+
+#### Step 1: Install Self-Hosted Coolify ($0 Software Cost)
+SSH into your clean Ubuntu VPS and run the official open-source installation script:
+```bash
+curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+```
+Once installation completes, navigate in your web browser to:
+```
+http://<YOUR_VPS_IP>:8000
+```
+Create your root admin account. *Note: Self-hosted Coolify is 100% free with unlimited servers and zero subscription fees.*
+
+#### Step 2: Add Project from Git Repository
+1. In the Coolify dashboard, select **Projects** ➔ **Add New Project**.
+2. Click **+ New Resource** ➔ **Docker Compose** ➔ **From Git Repository**.
+3. Select your repository (e.g. `kartiksetia/store-app`).
+4. Set **Base Directory** to `/`.
+5. Set **Docker Compose Location** to:
+   ```
+   docker/docker-compose.coolify.yml
+   ```
+
+#### Step 3: Configure Environment Variables
+In the **Environment Variables** tab of your Coolify resource, copy and populate the values from `.env.production.example`:
+- `POSTGRES_PASSWORD`: Strong generated database password.
+- `SECRET_KEY`: Strong Django secret key (`python -c "import secrets; print(secrets.token_urlsafe(50))"`).
+- `ALLOWED_HOSTS`: `api.<YOUR_VPS_IP>.sslip.io,app.<YOUR_VPS_IP>.sslip.io,store.<YOUR_VPS_IP>.sslip.io`
+- `CORS_ALLOWED_ORIGINS`: `https://app.<YOUR_VPS_IP>.sslip.io,https://store.<YOUR_VPS_IP>.sslip.io`
+- `CSRF_TRUSTED_ORIGINS`: `https://api.<YOUR_VPS_IP>.sslip.io,https://app.<YOUR_VPS_IP>.sslip.io,https://store.<YOUR_VPS_IP>.sslip.io`
+- `VITE_API_URL`: `https://api.<YOUR_VPS_IP>.sslip.io`
+- `NEXT_PUBLIC_API_URL`: `https://api.<YOUR_VPS_IP>.sslip.io`
+- `NEXT_PUBLIC_DASHBOARD_URL`: `https://app.<YOUR_VPS_IP>.sslip.io`
+
+#### Step 4: Configure Domains & SSL (Free via sslip.io)
+Under each service in Coolify, assign its public URL:
+- **`website` service (port 3000):** `https://store.<YOUR_VPS_IP>.sslip.io`
+- **`frontend` service (port 80):** `https://app.<YOUR_VPS_IP>.sslip.io`
+- **`backend` service (port 8000):** `https://api.<YOUR_VPS_IP>.sslip.io`
+
+*`sslip.io` is a free DNS resolution service that automatically routes subdomains directly to your VPS IP without manual DNS records.*
+
+#### Step 5: Deploy
+Click **Deploy**. Coolify will:
+1. Pull images and build the frontend, website, and backend production containers.
+2. Spin up PostgreSQL and verify health check.
+3. Automatically run database migrations via `docker/entrypoint.sh`.
+4. Run WhiteNoise `collectstatic --noinput` for Django admin and static files.
+5. Provision Let's Encrypt SSL certificates automatically and launch your applications.
+

@@ -1,0 +1,74 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-store_db}
+      POSTGRES_USER: ${POSTGRES_USER:-store_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be provided}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-store_user} -d $${POSTGRES_DB:-store_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - store_network
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.prod.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be provided}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      DATABASE_URL: postgres://${POSTGRES_USER:-store_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-store_db}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+    ports:
+      - "8000:8000"
+    networks:
+      - store_network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.prod.Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - store_network
+
+  website:
+    build:
+      context: .
+      dockerfile: docker/website.prod.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_DASHBOARD_URL: ${NEXT_PUBLIC_DASHBOARD_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    networks:
+      - store_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  store_network:
+    driver: bridge
