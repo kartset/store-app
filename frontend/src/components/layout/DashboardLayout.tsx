@@ -12,6 +12,7 @@ import {
   ThemeIcon,
   Stack,
   ScrollArea,
+  Divider,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
@@ -37,6 +38,7 @@ import {
 import { useMemo, useState } from 'react';
 import { CopilotDrawer, useCopilotStore } from '../../features/copilot';
 import { MustChangePasswordModal } from '../../features/auth/components/MustChangePasswordModal';
+import { getAuthSession, clearAuthSession } from '../../features/auth/utils/token';
 
 export function DashboardLayout() {
   const [opened, { toggle }] = useDisclosure();
@@ -44,30 +46,14 @@ export function DashboardLayout() {
   const location = useLocation();
   const { openDrawer } = useCopilotStore();
 
-  // Retrieve authenticated user and active store from localStorage
-  const user = useMemo(() => {
-    try {
-      const stored = localStorage.getItem('user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const currentStore = useMemo(() => {
-    try {
-      const stored = localStorage.getItem('current_store');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  }, []);
+  // Retrieve authenticated session and active store using centralized token helper
+  const session = useMemo(() => getAuthSession(), [location.pathname]);
+  const user = session.user;
+  const currentStore = session.currentStore;
+  const isOrgAdmin = session.isOrgAdmin;
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('current_store');
+    clearAuthSession();
     navigate('/login');
   };
 
@@ -77,14 +63,6 @@ export function DashboardLayout() {
     const last = user.last_name?.[0] || '';
     return (first + last).toUpperCase() || user.email?.[0]?.toUpperCase() || 'ST';
   }, [user]);
-
-  const isOrgAdmin = useMemo(() => {
-    if (!user) return false;
-    if (user.is_org_admin || user.role === 'ORG_ADMIN' || user.role === 'SUPER_ADMIN') return true;
-    if (currentStore?.role === 'ORG_ADMIN') return true;
-    if (user.organizations?.some((org: any) => org.role === 'ORG_ADMIN')) return true;
-    return false;
-  }, [user, currentStore]);
 
   const [mustChangePasswordOpen, setMustChangePasswordOpen] = useState(
     Boolean(user?.must_change_password)
@@ -264,48 +242,42 @@ export function DashboardLayout() {
           offsetScrollbars
           style={{ marginRight: -8, paddingRight: 8 }}
         >
-          <Text size="11px" fw={700} c="dimmed" px="xs" mb="xs" style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            Domain Navigation
-          </Text>
+          {/* Section 1: Store Operations (All Authenticated Staff) */}
+          <Group justify="space-between" px="xs" mb="xs">
+            <Text
+              size="11px"
+              fw={700}
+              c="dimmed"
+              style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}
+            >
+              Store Operations
+            </Text>
+            <Badge size="xs" variant="light" color="teal">
+              Staff
+            </Badge>
+          </Group>
 
           <Stack gap={4} pb="sm">
             <NavLink
-              label="AI & MCP Settings"
-              description="LLM gateway, models & tools"
+              label="POS Counter Terminal"
+              description="Fast billing & barcode checkout"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/ai-settings' ? 'indigo' : 'gray'}
-                  variant={location.pathname === '/ai-settings' ? 'filled' : 'light'}
+                  color={location.pathname === '/pos' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/pos' ? 'filled' : 'light'}
                 >
-                  <IconSparkles size={16} />
+                  <IconCashRegister size={16} />
                 </ThemeIcon>
               }
-              onClick={() => navigate('/ai-settings')}
-              active={location.pathname === '/ai-settings'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="Analytics & BI"
-              description="Real-time sales, trends & velocity"
-              leftSection={
-                <ThemeIcon
-                  size={28}
-                  radius="md"
-                  color={location.pathname === '/analytics' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/analytics' ? 'filled' : 'light'}
-                >
-                  <IconChartBar size={16} />
-                </ThemeIcon>
+              rightSection={
+                <Badge size="xs" color="brand" variant="filled">
+                  LIVE
+                </Badge>
               }
-              onClick={() => navigate('/analytics')}
-              active={location.pathname === '/analytics'}
+              onClick={() => navigate('/pos')}
+              active={location.pathname === '/pos'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -336,86 +308,20 @@ export function DashboardLayout() {
             />
 
             <NavLink
-              label="Customers"
-              description="Directory & loyalty profiles"
+              label="Products"
+              description="Master catalog & barcodes"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/customers' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/customers' ? 'filled' : 'light'}
+                  color={location.pathname === '/products' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/products' ? 'filled' : 'light'}
                 >
-                  <IconUsers size={16} />
+                  <IconPackage size={16} />
                 </ThemeIcon>
               }
-              onClick={() => navigate('/customers')}
-              active={location.pathname === '/customers'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="Data Exchange"
-              description="Bulk import, dry-runs & exports"
-              leftSection={
-                <ThemeIcon
-                  size={28}
-                  radius="md"
-                  color={location.pathname === '/data-exchange' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/data-exchange' ? 'filled' : 'light'}
-                >
-                  <IconDatabaseImport size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/data-exchange')}
-              active={location.pathname === '/data-exchange'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="Deliveries & Dispatch"
-              description="Fleet, driver OTP & COD"
-              leftSection={
-                <ThemeIcon
-                  size={28}
-                  radius="md"
-                  color={location.pathname === '/deliveries' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/deliveries' ? 'filled' : 'light'}
-                >
-                  <IconTruckDelivery size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/deliveries')}
-              active={location.pathname === '/deliveries'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
-              label="GST Filing & Returns"
-              description="GSTR-1, 3B & HSN returns"
-              leftSection={
-                <ThemeIcon
-                  size={28}
-                  radius="md"
-                  color={location.pathname === '/gst' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/gst' ? 'filled' : 'light'}
-                >
-                  <IconReceiptTax size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/gst')}
-              active={location.pathname === '/gst'}
+              onClick={() => navigate('/products')}
+              active={location.pathname === '/products'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -446,28 +352,6 @@ export function DashboardLayout() {
             />
 
             <NavLink
-              label="Invoices"
-              description="Receipts & tax bills"
-              leftSection={
-                <ThemeIcon
-                  size={28}
-                  radius="md"
-                  color={location.pathname === '/invoices' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/invoices' ? 'filled' : 'light'}
-                >
-                  <IconReceipt size={16} />
-                </ThemeIcon>
-              }
-              onClick={() => navigate('/invoices')}
-              active={location.pathname === '/invoices'}
-              style={{
-                borderRadius: '8px',
-                fontWeight: 600,
-                fontSize: '14px',
-              }}
-            />
-
-            <NavLink
               label="Orders & Delivery"
               description="Click & collect, shipping & hold"
               leftSection={
@@ -490,25 +374,20 @@ export function DashboardLayout() {
             />
 
             <NavLink
-              label="POS Counter Terminal"
-              description="Fast billing & barcode checkout"
+              label="Deliveries & Dispatch"
+              description="Fleet, driver OTP & COD"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/pos' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/pos' ? 'filled' : 'light'}
+                  color={location.pathname === '/deliveries' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/deliveries' ? 'filled' : 'light'}
                 >
-                  <IconCashRegister size={16} />
+                  <IconTruckDelivery size={16} />
                 </ThemeIcon>
               }
-              rightSection={
-                <Badge size="xs" color="brand" variant="filled">
-                  LIVE
-                </Badge>
-              }
-              onClick={() => navigate('/pos')}
-              active={location.pathname === '/pos'}
+              onClick={() => navigate('/deliveries')}
+              active={location.pathname === '/deliveries'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -517,20 +396,20 @@ export function DashboardLayout() {
             />
 
             <NavLink
-              label="Products"
-              description="Master catalog & barcodes"
+              label="Invoices"
+              description="Receipts & tax bills"
               leftSection={
                 <ThemeIcon
                   size={28}
                   radius="md"
-                  color={location.pathname === '/products' ? 'brand' : 'gray'}
-                  variant={location.pathname === '/products' ? 'filled' : 'light'}
+                  color={location.pathname === '/invoices' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/invoices' ? 'filled' : 'light'}
                 >
-                  <IconPackage size={16} />
+                  <IconReceipt size={16} />
                 </ThemeIcon>
               }
-              onClick={() => navigate('/products')}
-              active={location.pathname === '/products'}
+              onClick={() => navigate('/invoices')}
+              active={location.pathname === '/invoices'}
               style={{
                 borderRadius: '8px',
                 fontWeight: 600,
@@ -538,77 +417,27 @@ export function DashboardLayout() {
               }}
             />
 
-            {isOrgAdmin && (
-              <NavLink
-                label="Stores"
-                description="Retail branches & registers"
-                leftSection={
-                  <ThemeIcon
-                    size={28}
-                    radius="md"
-                    color={location.pathname === '/stores' ? 'brand' : 'gray'}
-                    variant={location.pathname === '/stores' ? 'filled' : 'light'}
-                  >
-                    <IconBuildingStore size={16} />
-                  </ThemeIcon>
-                }
-                onClick={() => navigate('/stores')}
-                active={location.pathname === '/stores'}
-                style={{
-                  borderRadius: '8px',
-                  fontWeight: 600,
-                  fontSize: '14px',
-                }}
-              />
-            )}
-
-            {isOrgAdmin && (
-              <NavLink
-                label="Staff & Users"
-                description="Manage store & org staff"
-                leftSection={
-                  <ThemeIcon
-                    size={28}
-                    radius="md"
-                    color={location.pathname === '/staff' ? 'brand' : 'gray'}
-                    variant={location.pathname === '/staff' ? 'filled' : 'light'}
-                  >
-                    <IconUserCheck size={16} />
-                  </ThemeIcon>
-                }
-                onClick={() => navigate('/staff')}
-                active={location.pathname === '/staff'}
-                style={{
-                  borderRadius: '8px',
-                  fontWeight: 600,
-                  fontSize: '14px',
-                }}
-              />
-            )}
-
-            {isOrgAdmin && (
-              <NavLink
-                label="Subcategories"
-                description="Custom taxonomy & groups"
-                leftSection={
-                  <ThemeIcon
-                    size={28}
-                    radius="md"
-                    color={location.pathname === '/subcategories' ? 'brand' : 'gray'}
-                    variant={location.pathname === '/subcategories' ? 'filled' : 'light'}
-                  >
-                    <IconCategory size={16} />
-                  </ThemeIcon>
-                }
-                onClick={() => navigate('/subcategories')}
-                active={location.pathname === '/subcategories'}
-                style={{
-                  borderRadius: '8px',
-                  fontWeight: 600,
-                  fontSize: '14px',
-                }}
-              />
-            )}
+            <NavLink
+              label="Customers"
+              description="Directory & loyalty profiles"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/customers' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/customers' ? 'filled' : 'light'}
+                >
+                  <IconUsers size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/customers')}
+              active={location.pathname === '/customers'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
 
             <NavLink
               label="Vendors"
@@ -631,7 +460,183 @@ export function DashboardLayout() {
                 fontSize: '14px',
               }}
             />
+
+            <NavLink
+              label="Analytics & BI"
+              description="Real-time sales, trends & velocity"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/analytics' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/analytics' ? 'filled' : 'light'}
+                >
+                  <IconChartBar size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/analytics')}
+              active={location.pathname === '/analytics'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="GST Filing & Returns"
+              description="GSTR-1, 3B & HSN returns"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/gst' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/gst' ? 'filled' : 'light'}
+                >
+                  <IconReceiptTax size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/gst')}
+              active={location.pathname === '/gst'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
+
+            <NavLink
+              label="Data Exchange"
+              description="Bulk import, dry-runs & exports"
+              leftSection={
+                <ThemeIcon
+                  size={28}
+                  radius="md"
+                  color={location.pathname === '/data-exchange' ? 'brand' : 'gray'}
+                  variant={location.pathname === '/data-exchange' ? 'filled' : 'light'}
+                >
+                  <IconDatabaseImport size={16} />
+                </ThemeIcon>
+              }
+              onClick={() => navigate('/data-exchange')}
+              active={location.pathname === '/data-exchange'}
+              style={{
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '14px',
+              }}
+            />
           </Stack>
+
+          {/* Section 2: Organization Administration (Org Admins Only) */}
+          {isOrgAdmin && (
+            <>
+              <Divider my="sm" style={{ borderColor: 'var(--border-subtle)' }} />
+              <Group justify="space-between" px="xs" mb="xs">
+                <Text
+                  size="11px"
+                  fw={700}
+                  c="dimmed"
+                  style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}
+                >
+                  Organization Administration
+                </Text>
+                <Badge size="xs" variant="light" color="brand">
+                  Admin
+                </Badge>
+              </Group>
+
+              <Stack gap={4} pb="sm">
+                <NavLink
+                  label="Stores"
+                  description="Retail branches & registers"
+                  leftSection={
+                    <ThemeIcon
+                      size={28}
+                      radius="md"
+                      color={location.pathname === '/stores' ? 'brand' : 'gray'}
+                      variant={location.pathname === '/stores' ? 'filled' : 'light'}
+                    >
+                      <IconBuildingStore size={16} />
+                    </ThemeIcon>
+                  }
+                  onClick={() => navigate('/stores')}
+                  active={location.pathname === '/stores'}
+                  style={{
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                  }}
+                />
+
+                <NavLink
+                  label="Staff & Users"
+                  description="Manage store & org staff"
+                  leftSection={
+                    <ThemeIcon
+                      size={28}
+                      radius="md"
+                      color={location.pathname === '/staff' ? 'brand' : 'gray'}
+                      variant={location.pathname === '/staff' ? 'filled' : 'light'}
+                    >
+                      <IconUserCheck size={16} />
+                    </ThemeIcon>
+                  }
+                  onClick={() => navigate('/staff')}
+                  active={location.pathname === '/staff'}
+                  style={{
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                  }}
+                />
+
+                <NavLink
+                  label="Subcategories"
+                  description="Custom taxonomy & groups"
+                  leftSection={
+                    <ThemeIcon
+                      size={28}
+                      radius="md"
+                      color={location.pathname === '/subcategories' ? 'brand' : 'gray'}
+                      variant={location.pathname === '/subcategories' ? 'filled' : 'light'}
+                    >
+                      <IconCategory size={16} />
+                    </ThemeIcon>
+                  }
+                  onClick={() => navigate('/subcategories')}
+                  active={location.pathname === '/subcategories'}
+                  style={{
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                  }}
+                />
+
+                <NavLink
+                  label="AI & MCP Settings"
+                  description="LLM gateway, models & tools"
+                  leftSection={
+                    <ThemeIcon
+                      size={28}
+                      radius="md"
+                      color={location.pathname === '/ai-settings' ? 'indigo' : 'gray'}
+                      variant={location.pathname === '/ai-settings' ? 'filled' : 'light'}
+                    >
+                      <IconSparkles size={16} />
+                    </ThemeIcon>
+                  }
+                  onClick={() => navigate('/ai-settings')}
+                  active={location.pathname === '/ai-settings'}
+                  style={{
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                  }}
+                />
+              </Stack>
+            </>
+          )}
         </AppShell.Section>
 
         {/* Sidebar Footer Info */}
