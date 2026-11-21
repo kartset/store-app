@@ -481,5 +481,54 @@ class ChangePasswordEndpointTests(TestCase):
         self.assertIn('new_password', res.data)
 
 
+class JWTRefreshRotationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.login_url = reverse('token_obtain_pair')
+        self.refresh_url = reverse('token_refresh')
+        self.password = 'SecurePass123!'
+
+        self.org = Organization.objects.create(name='Token Org', subdomain='tokenorg')
+        self.store = Store.objects.create(
+            organization_id=self.org,
+            name='Token Store',
+            is_active=True,
+        )
+        self.user = User.objects.create_user(
+            email='tokenstaff@store.com',
+            password=self.password,
+            first_name='Token',
+            last_name='Staff',
+            is_active=True,
+        )
+        StoreStaff.objects.create(user_id=self.user, store_id=self.store, role='CASHIER')
+
+    def test_jwt_settings_configured(self):
+        from django.conf import settings
+        from datetime import timedelta
+        self.assertEqual(settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'], timedelta(minutes=30))
+        self.assertEqual(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'], timedelta(days=7))
+        self.assertTrue(settings.SIMPLE_JWT['ROTATE_REFRESH_TOKENS'])
+
+    def test_token_refresh_rotates_refresh_token(self):
+        login_res = self.client.post(self.login_url, {
+            'email': 'tokenstaff@store.com',
+            'password': self.password,
+        }, format='json')
+        self.assertEqual(login_res.status_code, status.HTTP_200_OK)
+        initial_refresh = login_res.data['refresh']
+        initial_access = login_res.data['access']
+
+        refresh_res = self.client.post(self.refresh_url, {
+            'refresh': initial_refresh,
+        }, format='json')
+        self.assertEqual(refresh_res.status_code, status.HTTP_200_OK)
+        self.assertIn('access', refresh_res.data)
+        self.assertIn('refresh', refresh_res.data)
+        self.assertNotEqual(refresh_res.data['access'], initial_access)
+        self.assertNotEqual(refresh_res.data['refresh'], initial_refresh)
+
+
+
 
 

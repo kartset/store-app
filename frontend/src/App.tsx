@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginForm } from './features/auth/components/LoginForm';
 import { AuthCallback } from './features/auth/components/AuthCallback';
+import { ProtectedRoute } from './features/auth/components/ProtectedRoute';
+import { RoleGuard } from './features/auth/components/RoleGuard';
+import { PublicOnlyRoute } from './features/auth/components/PublicOnlyRoute';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { StoreList } from './features/stores/components/StoreList';
 import { ProductList } from './features/products/components/ProductList';
@@ -22,33 +25,44 @@ import { StaffList } from './features/staff';
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginForm />} />
+      {/* Public routes - Redirect already authenticated staff to /pos or intended redirect */}
+      <Route element={<PublicOnlyRoute />}>
+        <Route path="/login" element={<LoginForm />} />
+      </Route>
       <Route path="/auth/callback" element={<AuthCallback />} />
       
-      {/* Protected Dashboard Routes */}
-      <Route path="/" element={<DashboardLayout />}>
-        <Route index element={<Navigate to="/pos" replace />} />
-        <Route path="organizations" element={<Navigate to="/pos" replace />} />
-        <Route path="stores" element={<StoreList />} />
-        <Route path="staff" element={<StaffList />} />
-        <Route path="users" element={<Navigate to="/staff" replace />} />
-        <Route path="products" element={<ProductList />} />
-        <Route path="subcategories" element={<SubcategoryList />} />
-        <Route path="inventory" element={<InventoryList />} />
-        <Route path="vendors" element={<VendorList />} />
-        <Route path="customers" element={<CustomerList />} />
-        <Route path="invoices" element={<InvoiceList />} />
-        <Route path="pos" element={<POSTerminal />} />
-        <Route path="register" element={<RegisterDashboard />} />
-        <Route path="orders" element={<OrderList />} />
-        <Route path="deliveries" element={<DeliveryList />} />
-        <Route path="gst" element={<GSTDashboard />} />
-        <Route path="ai-settings" element={<AISettingsPage />} />
-        <Route path="analytics" element={<AnalyticsDashboard />} />
-        <Route path="data-exchange" element={<DataExchangeHub />} />
+      {/* Protected Dashboard Routes - Require valid authenticated session */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/" element={<DashboardLayout />}>
+          <Route index element={<Navigate to="/pos" replace />} />
+          <Route path="organizations" element={<Navigate to="/pos" replace />} />
+
+          {/* Org Admin Restricted Routes - Block unauthorized browser URL access */}
+          <Route element={<RoleGuard requiredRole="ORG_ADMIN" />}>
+            <Route path="stores" element={<StoreList />} />
+            <Route path="staff" element={<StaffList />} />
+            <Route path="users" element={<Navigate to="/staff" replace />} />
+            <Route path="subcategories" element={<SubcategoryList />} />
+            <Route path="ai-settings" element={<AISettingsPage />} />
+          </Route>
+
+          {/* General Authenticated Staff Routes */}
+          <Route path="products" element={<ProductList />} />
+          <Route path="inventory" element={<InventoryList />} />
+          <Route path="vendors" element={<VendorList />} />
+          <Route path="customers" element={<CustomerList />} />
+          <Route path="invoices" element={<InvoiceList />} />
+          <Route path="pos" element={<POSTerminal />} />
+          <Route path="register" element={<RegisterDashboard />} />
+          <Route path="orders" element={<OrderList />} />
+          <Route path="deliveries" element={<DeliveryList />} />
+          <Route path="gst" element={<GSTDashboard />} />
+          <Route path="analytics" element={<AnalyticsDashboard />} />
+          <Route path="data-exchange" element={<DataExchangeHub />} />
+        </Route>
       </Route>
 
-      
+      {/* Fallback route */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

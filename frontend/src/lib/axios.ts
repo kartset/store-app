@@ -76,6 +76,9 @@ api.interceptors.response.use(
         });
         const newAccessToken = response.data.access;
         localStorage.setItem('access_token', newAccessToken);
+        if (response.data.refresh) {
+          localStorage.setItem('refresh_token', response.data.refresh);
+        }
         api.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`;
         processQueue(null, newAccessToken);
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
@@ -85,7 +88,9 @@ api.interceptors.response.use(
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        localStorage.removeItem('current_store');
+        const currentPath = window.location.pathname + window.location.search;
+        window.location.href = `/login?session_expired=1&redirect=${encodeURIComponent(currentPath)}`;
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;

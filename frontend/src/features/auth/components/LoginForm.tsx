@@ -17,7 +17,7 @@ import { useForm } from '@mantine/form';
 import { zodResolver } from 'mantine-form-zod-resolver';
 import { z } from 'zod';
 import { useLogin, useGoogleLogin } from '../api/login';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   IconBuildingStore,
   IconMail,
@@ -40,6 +40,9 @@ export function LoginForm() {
   const loginMutation = useLogin();
   const googleMutation = useGoogleLogin();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('session_expired') === '1';
+  const redirectTarget = searchParams.get('redirect') || '/';
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
@@ -67,7 +70,7 @@ export function LoginForm() {
             }
           }
           setGoogleModalOpen(false);
-          navigate('/');
+          navigate(redirectTarget);
         } else {
           setGoogleUnregistered(true);
           setGoogleError(data.message || 'No active organization found for this Google account.');
@@ -100,7 +103,7 @@ export function LoginForm() {
             localStorage.setItem('current_store', JSON.stringify(data.user.current_store));
           }
         }
-        navigate('/');
+        navigate(redirectTarget);
       },
       onError: (error: any) => {
         const message =
@@ -267,6 +270,19 @@ export function LoginForm() {
               Enter your assigned store credentials to access your registers and catalog.
             </Text>
           </Box>
+
+          {sessionExpired && !authError && (
+            <Alert
+              icon={<IconAlertCircle size={18} />}
+              title="Session Expired"
+              color="yellow"
+              radius="md"
+              mb="lg"
+              variant="light"
+            >
+              Your session has expired or your token was rotated. Please sign in again to continue.
+            </Alert>
+          )}
 
           {authError && (
             <Alert
