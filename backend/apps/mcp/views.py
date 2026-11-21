@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from .client import MCPClient
 from .services import AICopilotEngine
-from .tools import MCPToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class MCPJsonRpcView(APIView):
 
         # Method 1: tools/list
         if method == "tools/list":
-            tools = MCPToolRegistry.list_tools()
+            tools = MCPClient.list_tools()
             return Response({
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -61,14 +61,13 @@ class MCPJsonRpcView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            tool_def = MCPToolRegistry.get_tool(tool_name)
-            if not tool_def:
+            res = MCPClient.call_tool(tool_name, arguments)
+            if res.get("isError") and "not found" in str(res.get("content", "")).lower():
                 return Response(
                     {"jsonrpc": "2.0", "error": {"code": -32601, "message": f"Method/Tool '{tool_name}' not found"}, "id": req_id},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            res = MCPToolRegistry.call_tool(tool_name, arguments)
             return Response({
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -80,10 +79,11 @@ class MCPJsonRpcView(APIView):
 
         # Method 3: ping
         elif method == "ping":
+            ping_res = MCPClient.ping()
             return Response({
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "result": {"status": "ok", "service": "StoreCraft Retail MCP Server"},
+                "result": {"status": "ok", "service": "StoreCraft Retail MCP Server", "details": ping_res},
             })
 
         # Unsupported method
@@ -101,7 +101,7 @@ class MCPToolsListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
-        tools = MCPToolRegistry.list_tools()
+        tools = MCPClient.list_tools()
         return Response({
             "count": len(tools),
             "tools": tools,

@@ -204,3 +204,6 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
+# Model Context Protocol (MCP) Server Integration
+MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://mcp:8080")
+
