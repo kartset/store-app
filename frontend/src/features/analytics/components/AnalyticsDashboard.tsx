@@ -181,38 +181,41 @@ export function AnalyticsDashboard() {
     csv += `Store: ${effectiveStoreId === 'all' ? 'All Outlets Combined' : (stores.find((s) => s.id === effectiveStoreId)?.name || effectiveStoreId)}\n\n`;
 
     csv += `EXECUTIVE FINANCIAL KPIs\n`;
-    csv += `Gross Sales,₹${ov.gross_sales}\n`;
-    csv += `Returns & Refunds,₹${ov.returns_total}\n`;
-    csv += `Net Sales,₹${ov.net_sales}\n`;
-    csv += `Total Tax (GST),₹${ov.total_tax}\n`;
+    csv += `Gross Sales,₹${Number(ov.gross_sales).toFixed(2)}\n`;
+    csv += `Returns & Refunds,₹${Number(ov.returns_total).toFixed(2)}\n`;
+    csv += `Net Sales,₹${Number(ov.net_sales).toFixed(2)}\n`;
+    csv += `Total Tax (GST),₹${Number(ov.total_tax).toFixed(2)}\n`;
     csv += `Total Invoices,${ov.total_invoices}\n`;
     csv += `Total Orders,${ov.total_orders}\n`;
-    csv += `Average Order Value,₹${ov.aov}\n`;
-    csv += `Sales Growth vs Prior Period,${ov.comparison?.sales_growth_pct}%\n\n`;
+    csv += `Average Order Value,₹${Number(ov.aov).toFixed(2)}\n`;
+    csv += `Sales Growth vs Prior Period,${ov.comparison?.sales_growth_pct ?? 0}%\n\n`;
 
-    if (categoryQuery.data?.categories) {
+    if (categoryQuery.data?.categories && categoryQuery.data.categories.length > 0) {
       csv += `CATEGORY REVENUE BREAKDOWN\n`;
       csv += `Category Name,Revenue,Units Sold,Revenue Share %\n`;
       categoryQuery.data.categories.forEach((c) => {
-        csv += `"${c.category_name}",${c.revenue},${c.units_sold},${c.revenue_share_pct}%\n`;
+        csv += `"${c.category_name || 'Uncategorized'}",₹${Number(c.revenue).toFixed(2)},${c.units_sold},${c.revenue_share_pct ?? 0}%\n`;
       });
       csv += `\n`;
     }
 
-    if (topProductsQuery.data?.products) {
+    if (topProductsQuery.data?.products && topProductsQuery.data.products.length > 0) {
       csv += `TOP PERFORMING PRODUCTS\n`;
       csv += `Product Name,SKU,Category,Revenue,Units Sold,Revenue Share %\n`;
       topProductsQuery.data.products.forEach((p) => {
-        csv += `"${p.name}","${p.sku || ''}","${p.category_name}",${p.revenue},${p.units_sold},${p.revenue_share_pct}%\n`;
+        const share = p.revenue_share_pct ?? p.contribution_pct ?? 0;
+        csv += `"${p.name}","${p.sku || ''}","${p.category_name || 'General'}",₹${Number(p.revenue).toFixed(2)},${p.units_sold},${share}%\n`;
       });
       csv += `\n`;
     }
 
-    if (paymentsQuery.data?.payment_methods) {
+    const paymentList = paymentsQuery.data?.payment_methods || paymentsQuery.data?.methods;
+    if (paymentList && paymentList.length > 0) {
       csv += `PAYMENT TENDER SPLIT\n`;
       csv += `Tender Method,Transactions,Amount,Share %\n`;
-      paymentsQuery.data.payment_methods.forEach((pm) => {
-        csv += `"${pm.label || pm.method}",${pm.count},${pm.total_amount},${pm.percentage}%\n`;
+      paymentList.forEach((pm) => {
+        const share = pm.percentage ?? pm.percentage_share ?? 0;
+        csv += `"${pm.label || pm.method}",${pm.count},₹${Number(pm.total_amount).toFixed(2)},${share}%\n`;
       });
     }
 
