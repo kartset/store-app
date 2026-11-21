@@ -19,6 +19,8 @@ services:
     entrypoint: ["/entrypoint.sh"]
     command: ["uv", "run", "manage.py", "runserver", "0.0.0.0:8000"]
     env_file: ../.env
+    environment:
+      - MCP_SERVER_URL=http://mcp:8080
     ports:
       - "8000:8000"
     depends_on:
@@ -56,6 +58,24 @@ services:
       - ../website:/app
       - /app/node_modules
       - /app/.next
+
+  mcp:
+    build:
+      context: ..
+      dockerfile: docker/mcp.Dockerfile
+    command: ["uv", "run", "python", "server.py"]
+    env_file: ../.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - ../mcp:/app/mcp
+      - ../backend:/app/backend
+      - uv_cache:/root/.cache/uv
 
 volumes:
   postgres_data:

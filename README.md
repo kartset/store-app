@@ -69,9 +69,11 @@ The backend features a decoupled architecture designed to eliminate circular imp
 
 ### 8. Real-Time Retail Analytics & BI (`/analytics`)
 - **Executive KPI Strip**: Gross revenue, net profit margin, invoice count, and average order value (AOV).
+- **Continuous Sales & Revenue Trajectory**: Interactive daily time-series line chart tracking gross revenue, net sales, and invoice volume with continuous daily resolution.
 - **Hourly Sales Velocity**: Visual heatmaps and peak hour rush detection.
 - **Top Product Performance**: Velocity tracking, revenue contribution, and margin analytics.
 - **Payment Method Distribution**: Tender split across Cash, UPI, Card, and Store Credit.
+- **Comprehensive CSV Export**: Instant export of consolidated period summaries, daily trajectories, payment breakdowns, and top products.
 
 ### 9. Data Exchange & Bulk Migration Hub (`/data-exchange`)
 - **Multi-Entity Bulk Import**: CSV and Excel imports for products, inventory stock, customers, and vendors.
@@ -91,21 +93,43 @@ The backend features a decoupled architecture designed to eliminate circular imp
 - **Statutory GSTN JSON Exporter**: Direct one-click export of government GSTN offline tool-compliant JSON files.
 - **Filing Periods Ledger**: Monthly and quarterly period tracking (`DRAFT`, `READY`, `FILED`) with ARN recording and audit lock.
 
-### 12. AI-Native Model Context Protocol (MCP) & Retail Copilot (`/api/mcp/`, `/ai-settings`)
-- **Store App MCP Server (`backend/apps/mcp/`)**: Standard JSON-RPC 2.0 endpoint (`POST /api/mcp/rpc/`) and REST discovery (`GET /api/mcp/tools/`).
-- **7 Live Retail MCP Tools**:
-  1. `search_products`: Multi-attribute catalog lookup.
-  2. `check_inventory`: Stock levels, low-stock alerts, and valuation.
-  3. `get_daily_sales_summary`: Real-time gross turnover, net revenue, GST split, and tender distribution.
-  4. `lookup_customer`: Customer 360, multi-store loyalty balance, and visit counts.
-  5. `get_gst_filing_summary`: Monthly/quarterly GSTR-1 and GSTR-3B tax liability.
-  6. `list_stores`: Active physical store directory.
-  7. `lookup_order`: Order tracking and customer details.
+### 12. Dedicated Model Context Protocol (MCP) Service & AI Copilot (`mcp/`, `/api/mcp/`, `/ai-settings`)
+- **Standalone MCP Microservice (`mcp/`)**: Official Model Context Protocol service built with Python (`mcp` v2.3.0) and Django ORM running in its own container (`store_mcp`) on port `8080`, exposing the official Server-Sent Events (`/sse`) transport and JSON-RPC dispatch endpoint.
+- **Client-Server Architecture (`MCPClient`)**: Django backend integrates with the MCP container via `MCPClient` (`MCP_SERVER_URL=http://mcp:8080`), with transparent, fault-tolerant fallback to local execution for offline development and testing.
+- **12 Unified Multi-Tenant Retail & Analytics Tools**:
+  1. `get_sales_kpis`: Gross turnover, net sales, taxes, discounts, order count, and AOV.
+  2. `get_sales_trajectory`: Continuous daily revenue and invoice count time-series over $N$ days.
+  3. `get_top_selling_products`: Ranked products by sales volume and revenue contribution.
+  4. `get_payment_method_breakdown`: Tender distribution (Cash, UPI, Card) and percentage share.
+  5. `get_hourly_store_traffic`: 24-hour hourly billing velocity and rush-hour identification.
+  6. `search_products`: Multi-attribute catalog lookup across barcodes, SKUs, and categories.
+  7. `check_inventory`: On-hand stock levels, low-stock warnings, and valuation.
+  8. `get_daily_sales_summary`: Real-time gross turnover, net revenue, GST split, and tender distribution.
+  9. `lookup_customer`: Customer 360, multi-store loyalty balance, and visit counts.
+  10. `get_gst_filing_summary`: Monthly/quarterly GSTR-1 and GSTR-3B statutory tax liability.
+  11. `list_stores`: Active physical store directory.
+  12. `lookup_order`: Order tracking, customer snapshots, and fulfillment states.
 - **Dual AI Copilot Engine**:
   - **Online Mode**: Multi-turn autonomous tool execution loop supporting OpenRouter and OpenAI APIs.
-  - **Zero-Key Offline Fallback**: Direct intent routing against Django ORM models when external API keys are omitted.
+  - **Zero-Key Offline Fallback**: Direct intent routing against live store models when external API keys are omitted.
 - **Frontend Retail Copilot Drawer**: Global top navbar sparkles button, quick prompt chips, tool execution transparency disclosure, and rich Markdown tables.
 - **AI Settings Hub (`/ai-settings`)**: Provider selection, model picker, client-side masked API key storage, and connection test pings.
+
+### 13. 100-Day Enterprise Retail Demo Seeding (`manage.py seed_demo_store`)
+- **Realistic 100-Day Timeline Simulation**: Bootstraps 100 consecutive days of realistic retail enterprise data:
+  - 100 daily cash register sessions with float verifications, cash drops, pay-outs, and closing variance audits.
+  - Continuous POS transactions generating hundreds of invoices across UPI, Cash, and Card tenders.
+  - Full inventory movement lifecycle: Goods Receipt Notes (GRN), POS sales deductions, damage adjustments, and return restocks.
+  - Omnichannel home delivery dispatches with OTP verification and Cash on Delivery (COD) settlements.
+  - Sourcing matrix with active vendors and sample customer returns/credit notes.
+- **CLI Command Usage**:
+  ```bash
+  # Seed 100 days of demo data for an organization and store
+  uv run manage.py seed_demo_store --days 100 --organization-id <ORG_UUID> --store-id <STORE_UUID>
+
+  # Or seed with automatic creation of a default enterprise demo store
+  uv run manage.py seed_demo_store --days 100
+  ```
 
 ---
 
@@ -222,6 +246,7 @@ Under each service in Coolify, assign its public URL:
 - **`website` service (port 3000):** `https://store.<YOUR_VPS_IP>.sslip.io`
 - **`frontend` service (port 80):** `https://app.<YOUR_VPS_IP>.sslip.io`
 - **`backend` service (port 8000):** `https://api.<YOUR_VPS_IP>.sslip.io`
+- **`mcp` service (port 8080):** `https://mcp.<YOUR_VPS_IP>.sslip.io` (for Cursor, Claude Desktop, Antigravity)
 
 *`sslip.io` is a free DNS resolution service that automatically routes subdomains directly to your VPS IP without manual DNS records.*
 

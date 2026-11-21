@@ -7,7 +7,7 @@ from typing import Any
 
 from django.conf import settings
 
-from .tools import MCPToolRegistry
+from .client import MCPClient
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +31,13 @@ class AICopilotEngine:
     @classmethod
     def get_openai_tools(cls) -> list[dict[str, Any]]:
         tools = []
-        for t in MCPToolRegistry.list_tools():
+        for t in MCPClient.list_tools():
             tools.append({
                 "type": "function",
                 "function": {
                     "name": t["name"],
                     "description": t["description"],
-                    "parameters": t["inputSchema"],
+                    "parameters": t.get("inputSchema", {}),
                 },
             })
         return tools
@@ -117,7 +117,7 @@ class AICopilotEngine:
                     if store_id and "store_id" not in fn_args:
                         fn_args["store_id"] = store_id
 
-                    tool_result = MCPToolRegistry.call_tool(fn_name, fn_args)
+                    tool_result = MCPClient.call_tool(fn_name, fn_args)
                     result_text = tool_result["content"][0]["text"] if tool_result.get("content") else ""
 
                     executed_tools.append({
@@ -197,7 +197,7 @@ class AICopilotEngine:
 
         # Intent 1: Sales / Revenue / Turnover
         if any(w in last_user_msg for w in ["sale", "revenue", "turnover", "today", "bill", "collection", "earnings"]):
-            tool_res = MCPToolRegistry.call_tool("get_daily_sales_summary", {"store_id": store_id})
+            tool_res = MCPClient.call_tool("get_daily_sales_summary", {"store_id": store_id})
             data = tool_res.get("structured_data", {})
             executed_tools.append({
                 "tool": "get_daily_sales_summary",
@@ -230,7 +230,7 @@ class AICopilotEngine:
         # Intent 2: Inventory / Low Stock / Restock
         elif any(w in last_user_msg for w in ["stock", "inventory", "low stock", "reorder", "quantity", "warehouse", "items remaining"]):
             is_low = "low" in last_user_msg or "reorder" in last_user_msg
-            tool_res = MCPToolRegistry.call_tool("check_inventory", {"store_id": store_id, "low_stock_only": is_low, "limit": 10})
+            tool_res = MCPClient.call_tool("check_inventory", {"store_id": store_id, "low_stock_only": is_low, "limit": 10})
             data = tool_res.get("structured_data", [])
             executed_tools.append({
                 "tool": "check_inventory",
@@ -257,7 +257,7 @@ class AICopilotEngine:
 
         # Intent 3: GST / Tax / GSTR-1 / GSTR-3B
         elif any(w in last_user_msg for w in ["gst", "tax", "gstr", "hsn", "liability", "filing"]):
-            tool_res = MCPToolRegistry.call_tool("get_gst_filing_summary", {"store_id": store_id})
+            tool_res = MCPClient.call_tool("get_gst_filing_summary", {"store_id": store_id})
             data = tool_res.get("structured_data", {})
             executed_tools.append({
                 "tool": "get_gst_filing_summary",
@@ -290,7 +290,7 @@ class AICopilotEngine:
             # Extract digits from query
             digits = "".join(filter(str.isdigit, last_user_msg))
             phone = digits if len(digits) >= 10 else "9876543210"
-            tool_res = MCPToolRegistry.call_tool("lookup_customer", {"phone": phone})
+            tool_res = MCPClient.call_tool("lookup_customer", {"phone": phone})
             data = tool_res.get("structured_data", {})
             executed_tools.append({
                 "tool": "lookup_customer",
@@ -313,7 +313,7 @@ class AICopilotEngine:
 
         # Intent 5: Stores
         elif any(w in last_user_msg for w in ["store", "branch", "location", "outlet"]):
-            tool_res = MCPToolRegistry.call_tool("list_stores", {"active_only": True})
+            tool_res = MCPClient.call_tool("list_stores", {"active_only": True})
             data = tool_res.get("structured_data", [])
             executed_tools.append({
                 "tool": "list_stores",
@@ -328,7 +328,7 @@ class AICopilotEngine:
         elif any(w in last_user_msg for w in ["product", "find", "search", "price", "mrp", "item", "barcode"]):
             words = last_user_msg.split()
             query = words[-1] if words else "Milk"
-            tool_res = MCPToolRegistry.call_tool("search_products", {"query": query, "limit": 5})
+            tool_res = MCPClient.call_tool("search_products", {"query": query, "limit": 5})
             data = tool_res.get("structured_data", [])
             executed_tools.append({
                 "tool": "search_products",
