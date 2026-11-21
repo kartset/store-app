@@ -58,8 +58,10 @@ except ImportError:
 
 # Register tool modules
 from tools.analytics import register_analytics_tools
+from tools.retail import register_retail_tools
 
 register_analytics_tools(mcp)
+register_retail_tools(mcp)
 
 
 def run():
