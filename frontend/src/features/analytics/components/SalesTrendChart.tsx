@@ -40,7 +40,17 @@ export function SalesTrendChart({
     );
   }
 
-  const points = data.trend || [];
+  const rawPoints = data.trend || data.points || data.data || [];
+  const points: SalesTrendPoint[] = rawPoints.map((p) => ({
+    ...p,
+    label: p.label || p.date,
+    gross_sales: Number(p.gross_sales) || 0,
+    net_sales: Number(p.net_sales) || 0,
+    returns: Number(p.returns) || 0,
+    discounts: Number(p.discounts ?? p.discount) || 0,
+    taxes: Number(p.taxes ?? p.tax) || 0,
+    invoice_count: Number(p.invoice_count ?? p.invoices) || 0,
+  }));
   const maxVal = Math.max(...points.map((p) => Math.max(p.gross_sales, p.net_sales, 100)), 1000);
 
   // Chart dimensions

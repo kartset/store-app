@@ -345,9 +345,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             created_payments.append(p_obj)
             total_paid += amount
 
-        # If fully paid, transition status to PAID
+        # If fully paid, transition status to PAID; if partially paid, transition to PARTIALLY_PAID
         if total_paid >= rounded_grand_total > Decimal('0.00') or rounded_grand_total == Decimal('0.00'):
             invoice.status = InvoiceStatus.PAID
+        elif total_paid > Decimal('0.00'):
+            invoice.status = InvoiceStatus.PARTIALLY_PAID
         invoice.save()
 
         # Update active register session shift totals and record cash transactions

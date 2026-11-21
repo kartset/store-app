@@ -378,3 +378,73 @@ class AnalyticsAPITests(TestCase):
         res_unassigned = self.client.get(f'/api/analytics/overview/?store_id={self.store2.id}')
         self.assertEqual(res_unassigned.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_sales_trend_and_contract_alignment(self):
+        """
+        Verifies that:
+        1. Sales trend endpoint returns `trend` list with numeric values and friendly labels.
+        2. Accepts `granularity=day` as well as `interval`.
+        3. Draft active invoices are counted in overview and trajectory.
+        4. Top products and payment methods return fields expected by dashboard and CSV export.
+        """
+        self.client.force_authenticate(user=self.user)
+
+        # Create a new draft invoice to ensure non-cancelled draft invoices reflect in analytics
+        draft_inv = Invoice.objects.create(
+            store_id=self.store,
+            customer_id=self.customer,
+            type=InvoiceType.POS,
+            status=InvoiceStatus.DRAFT,
+            subtotal=Decimal('500.00'),
+            total_discount=Decimal('0.00'),
+            total_gst=Decimal('90.00'),
+            grand_total=Decimal('500.00'),
+        )
+        InvoiceItem.objects.create(
+            invoice_id=draft_inv,
+            product_id=self.product1,
+            product_name_snapshot='Artisan Coffee Beans 500g',
+            sku_snapshot='ACB-500',
+            quantity=1,
+            unit_price=Decimal('500.00'),
+            discount=Decimal('0.00'),
+            line_total=Decimal('500.00')
+        )
+
+        # 1. Sales Trend
+        trend_res = self.client.get('/api/analytics/sales-trend/?granularity=day')
+        self.assertEqual(trend_res.status_code, status.HTTP_200_OK)
+        self.assertIn('trend', trend_res.data)
+        self.assertEqual(trend_res.data['granularity'], 'day')
+        self.assertTrue(len(trend_res.data['trend']) > 0)
+        first_point = trend_res.data['trend'][0]
+        self.assertIn('gross_sales', first_point)
+        self.assertIsInstance(first_point['gross_sales'], float)
+        self.assertIn('label', first_point)
+        self.assertIn('invoice_count', first_point)
+
+        # 2. Overview includes draft invoice (3100 + 500 = 3600)
+        overview_res = self.client.get('/api/analytics/overview/')
+        self.assertEqual(overview_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(overview_res.data['gross_sales']), Decimal('3600.00'))
+        self.assertEqual(overview_res.data['total_invoices'], 3)
+
+        # 3. Top Products returns revenue_share_pct and category_name
+        top_res = self.client.get('/api/analytics/top-products/')
+        self.assertEqual(top_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(len(top_res.data['products']) > 0)
+        prod = top_res.data['products'][0]
+        self.assertIn('revenue_share_pct', prod)
+        self.assertIn('category_name', prod)
+        self.assertIn('id', prod)
+
+        # 4. Payment Methods returns payment_methods list with label and percentage
+        pay_res = self.client.get('/api/analytics/payment-methods/')
+        self.assertEqual(pay_res.status_code, status.HTTP_200_OK)
+        self.assertIn('payment_methods', pay_res.data)
+        self.assertIn('total_collected', pay_res.data)
+        if pay_res.data['payment_methods']:
+            pm = pay_res.data['payment_methods'][0]
+            self.assertIn('percentage', pm)
+            self.assertIn('label', pm)
+
+

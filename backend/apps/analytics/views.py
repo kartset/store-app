@@ -63,18 +63,15 @@ def get_analytics_accessible_store_ids(request, requested_store_id=None):
             return [requested_store_id]
         return None
 
-    # Check Org Admin status
-    is_org_admin = OrganizationStaff.objects.filter(
+    # Check Organization affiliation via OrganizationStaff
+    org_staff = OrganizationStaff.objects.filter(
         user_id=user,
-        role='ORG_ADMIN',
         is_active=True,
         is_deleted=False,
-    ).exists()
+    ).select_related('organization_id').first()
 
-    if is_org_admin:
-        user_org = get_user_organization(user)
-        if not user_org:
-            return []
+    if org_staff:
+        user_org = org_staff.organization_id
         org_store_ids = list(
             Store.objects.filter(
                 organization_id=user_org,
@@ -93,7 +90,7 @@ def get_analytics_accessible_store_ids(request, requested_store_id=None):
 
         return org_store_ids
 
-    # Store Staff (non-org-admin)
+    # Store Staff (direct store assignment without org role)
     assigned_store_ids = list(
         StoreStaff.objects.filter(
             user_id=user,
@@ -160,13 +157,12 @@ class AnalyticsOverviewView(APIView):
         start_date, end_date = _parse_date_range(request)
         store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
-        # Base Invoice Filters
+        # Base Invoice Filters - include all non-cancelled invoices
         inv_filter = Q(
             is_deleted=False,
-            status__in=[InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID],
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
-        )
+        ) & ~Q(status=InvoiceStatus.CANCELLED)
         if store_ids is not None:
             inv_filter &= Q(store_id__in=store_ids)
 
@@ -217,10 +213,9 @@ class AnalyticsOverviewView(APIView):
 
         prev_inv_filter = Q(
             is_deleted=False,
-            status__in=[InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID],
             created_at__date__gte=prev_start,
             created_at__date__lte=prev_end,
-        )
+        ) & ~Q(status=InvoiceStatus.CANCELLED)
         if store_ids is not None:
             prev_inv_filter &= Q(store_id__in=store_ids)
 
@@ -281,7 +276,7 @@ class SalesTrendAnalyticsView(APIView):
 
     def get(self, request):
         store_id = request.query_params.get('store_id')
-        interval = request.query_params.get('interval', 'day').lower()
+        interval = (request.query_params.get('granularity') or request.query_params.get('interval') or 'day').lower()
         start_date, end_date = _parse_date_range(request)
         store_ids = get_analytics_accessible_store_ids(request, requested_store_id=store_id)
 
@@ -293,10 +288,9 @@ class SalesTrendAnalyticsView(APIView):
 
         inv_filter = Q(
             is_deleted=False,
-            status__in=[InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID],
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
-        )
+        ) & ~Q(status=InvoiceStatus.CANCELLED)
         if store_ids is not None:
             inv_filter &= Q(store_id__in=store_ids)
 
@@ -338,24 +332,43 @@ class SalesTrendAnalyticsView(APIView):
         for point in sales_by_date:
             b_val = point['bucket']
             date_key = b_val.strftime('%Y-%m-%d') if hasattr(b_val, 'strftime') else str(b_val)
+            if hasattr(b_val, 'strftime'):
+                if interval == 'month':
+                    label = b_val.strftime('%b %Y')
+                elif interval == 'week':
+                    label = f"Wk {b_val.strftime('%d %b')}"
+                else:
+                    label = b_val.strftime('%d %b')
+            else:
+                label = str(b_val)
+
             gross = point['gross_sales'] or Decimal('0.00')
             ret = returns_map.get(date_key, Decimal('0.00')) or Decimal('0.00')
             net = max(Decimal('0.00'), gross - ret)
+            disc = point['discount'] or Decimal('0.00')
+            tax_val = point['tax'] or Decimal('0.00')
+            inv_count = point['invoices'] or 0
 
             trend_data.append({
                 'date': date_key,
-                'gross_sales': str(gross.quantize(Decimal('0.01'))),
-                'returns': str(ret.quantize(Decimal('0.01'))),
-                'net_sales': str(net.quantize(Decimal('0.01'))),
-                'discount': str((point['discount'] or Decimal('0.00')).quantize(Decimal('0.01'))),
-                'tax': str((point['tax'] or Decimal('0.00')).quantize(Decimal('0.01'))),
-                'invoices': point['invoices'] or 0,
+                'label': label,
+                'gross_sales': float(gross.quantize(Decimal('0.01'))),
+                'returns': float(ret.quantize(Decimal('0.01'))),
+                'net_sales': float(net.quantize(Decimal('0.01'))),
+                'discount': str(disc.quantize(Decimal('0.01'))),
+                'discounts': float(disc.quantize(Decimal('0.01'))),
+                'tax': str(tax_val.quantize(Decimal('0.01'))),
+                'taxes': float(tax_val.quantize(Decimal('0.01'))),
+                'invoices': inv_count,
+                'invoice_count': inv_count,
             })
 
         return Response({
+            'granularity': interval,
             'interval': interval,
             'start_date': start_date.isoformat(),
             'end_date': end_date.isoformat(),
+            'trend': trend_data,
             'points': trend_data,
             'data': trend_data,
         })
@@ -376,11 +389,10 @@ class TopProductsAnalyticsView(APIView):
 
         item_filter = Q(
             invoice_id__is_deleted=False,
-            invoice_id__status__in=[InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID],
             invoice_id__created_at__date__gte=start_date,
             invoice_id__created_at__date__lte=end_date,
             is_deleted=False,
-        )
+        ) & ~Q(invoice_id__status=InvoiceStatus.CANCELLED)
         if store_ids is not None:
             item_filter &= Q(invoice_id__store_id__in=store_ids)
 
@@ -393,7 +405,7 @@ class TopProductsAnalyticsView(APIView):
 
         products_agg = (
             InvoiceItem.objects.filter(item_filter)
-            .values('product_id', 'product_name_snapshot', 'sku_snapshot')
+            .values('product_id', 'product_name_snapshot', 'sku_snapshot', 'barcode_snapshot', 'product_id__category_id__name')
             .annotate(
                 units_sold=Sum('quantity'),
                 total_revenue=Sum('line_total'),
@@ -412,20 +424,26 @@ class TopProductsAnalyticsView(APIView):
                 if total_period_revenue > Decimal('0.00')
                 else Decimal('0.0')
             )
+            cat_name = item.get('product_id__category_id__name') or 'General'
 
             results.append({
                 'rank': idx,
+                'id': str(item['product_id']) if item['product_id'] else str(idx),
                 'product_id': item['product_id'],
                 'name': item['product_name_snapshot'],
-                'sku': item['sku_snapshot'],
+                'sku': item['sku_snapshot'] or '',
+                'barcode': item.get('barcode_snapshot') or '',
+                'category_name': cat_name,
                 'units_sold': units,
-                'revenue': str(rev.quantize(Decimal('0.01'))),
+                'revenue': float(rev.quantize(Decimal('0.01'))),
                 'average_price': str(avg_price),
                 'contribution_pct': float(pct),
+                'revenue_share_pct': float(pct),
             })
 
         return Response({
             'total_revenue': str(total_period_revenue.quantize(Decimal('0.01'))),
+            'period_total_revenue': float(total_period_revenue.quantize(Decimal('0.01'))),
             'products': results,
         })
 
@@ -443,11 +461,10 @@ class CategoryBreakdownAnalyticsView(APIView):
 
         item_filter = Q(
             invoice_id__is_deleted=False,
-            invoice_id__status__in=[InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID],
             invoice_id__created_at__date__gte=start_date,
             invoice_id__created_at__date__lte=end_date,
             is_deleted=False,
-        )
+        ) & ~Q(invoice_id__status=InvoiceStatus.CANCELLED)
         if store_ids is not None:
             item_filter &= Q(invoice_id__store_id__in=store_ids)
 
@@ -481,7 +498,7 @@ class CategoryBreakdownAnalyticsView(APIView):
                 'category_id': cat_id,
                 'category_name': cat_name,
                 'units_sold': units,
-                'revenue': str(rev.quantize(Decimal('0.01'))),
+                'revenue': float(rev.quantize(Decimal('0.01'))),
                 'revenue_share_pct': float(share_pct),
             })
 
@@ -505,10 +522,9 @@ class HourlyFootfallAnalyticsView(APIView):
 
         inv_filter = Q(
             is_deleted=False,
-            status__in=[InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID],
             created_at__date__gte=start_date,
             created_at__date__lte=end_date,
-        )
+        ) & ~Q(status=InvoiceStatus.CANCELLED)
         if store_ids is not None:
             inv_filter &= Q(store_id__in=store_ids)
 
@@ -542,7 +558,7 @@ class HourlyFootfallAnalyticsView(APIView):
                 'hour': h,
                 'hour_label': f"{h:02d}:00",
                 'transaction_count': cnt,
-                'revenue': str(rev.quantize(Decimal('0.01'))),
+                'revenue': float(rev.quantize(Decimal('0.01'))),
             })
 
         return Response({
@@ -569,7 +585,7 @@ class PaymentMethodsAnalyticsView(APIView):
             invoice_id__created_at__date__lte=end_date,
             is_deleted=False,
             status='SUCCESS',
-        )
+        ) & ~Q(invoice_id__status=InvoiceStatus.CANCELLED)
         if store_ids is not None:
             payment_filter &= Q(invoice_id__store_id__in=store_ids)
 
@@ -587,6 +603,14 @@ class PaymentMethodsAnalyticsView(APIView):
             .order_by('-total_amount')
         )
 
+        TENDER_LABELS = {
+            'CASH': 'Cash',
+            'UPI': 'UPI QR',
+            'CARD': 'Credit / Debit Card',
+            'STORE_CREDIT': 'Store Credit',
+            'RAZORPAY': 'Online / Gateway',
+        }
+
         results = []
         for row in payments_agg:
             amt = row['total_amount'] or Decimal('0.00')
@@ -595,17 +619,23 @@ class PaymentMethodsAnalyticsView(APIView):
                 if total_tendered > Decimal('0.00')
                 else Decimal('0.0')
             )
+            m_code = row['method']
+            label = TENDER_LABELS.get(m_code, m_code.replace('_', ' ').title())
 
             results.append({
-                'method': row['method'],
+                'method': m_code,
+                'label': label,
                 'count': row['count'],
-                'total_amount': str(amt.quantize(Decimal('0.01'))),
+                'total_amount': float(amt.quantize(Decimal('0.01'))),
+                'percentage': float(pct),
                 'percentage_share': float(pct),
             })
 
         return Response({
             'total_amount': str(total_tendered.quantize(Decimal('0.01'))),
+            'total_collected': float(total_tendered.quantize(Decimal('0.01'))),
             'methods': results,
+            'payment_methods': results,
         })
 
 

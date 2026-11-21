@@ -92,7 +92,7 @@ export function TopProductsLeaderboard({
 
             return (
               <Box
-                key={prod.id}
+                key={prod.id || prod.product_id || String(rank)}
                 p="xs"
                 style={{
                   borderRadius: 8,
@@ -125,7 +125,7 @@ export function TopProductsLeaderboard({
                           {prod.name}
                         </Text>
                         <Badge size="xs" variant="light" color="indigo" radius="xs">
-                          {prod.category_name}
+                          {prod.category_name || 'General'}
                         </Badge>
                       </Group>
                       <Text size="xs" c="dimmed" style={{ fontSize: '0.7rem' }}>
@@ -143,9 +143,9 @@ export function TopProductsLeaderboard({
                         {prod.units_sold} units sold
                       </Text>
                     </Stack>
-                    <Tooltip label={`${prod.revenue_share_pct}% of total sales`}>
+                    <Tooltip label={`${prod.revenue_share_pct ?? prod.contribution_pct ?? 0}% of total sales`}>
                       <Badge size="sm" variant="outline" color="brand">
-                        {prod.revenue_share_pct}%
+                        {prod.revenue_share_pct ?? prod.contribution_pct ?? 0}%
                       </Badge>
                     </Tooltip>
                   </Group>

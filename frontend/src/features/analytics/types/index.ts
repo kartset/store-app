@@ -35,36 +35,45 @@ export interface OverviewAnalytics {
 
 export interface SalesTrendPoint {
   date: string;
-  label: string;
+  label?: string;
   gross_sales: number;
   net_sales: number;
   returns: number;
-  discounts: number;
-  taxes: number;
-  invoice_count: number;
+  discounts?: number;
+  discount?: string | number;
+  taxes?: number;
+  tax?: string | number;
+  invoice_count?: number;
+  invoices?: number;
 }
 
 export interface SalesTrendAnalytics {
-  granularity: 'day' | 'week' | 'month';
+  granularity?: 'day' | 'week' | 'month';
+  interval?: 'day' | 'week' | 'month';
   start_date: string;
   end_date: string;
-  trend: SalesTrendPoint[];
+  trend?: SalesTrendPoint[];
+  points?: SalesTrendPoint[];
+  data?: SalesTrendPoint[];
 }
 
 export interface TopProductItem {
-  id: string;
+  id?: string;
+  product_id?: string;
   name: string;
   sku: string;
-  barcode: string;
-  category_name: string;
+  barcode?: string;
+  category_name?: string;
   revenue: number;
   units_sold: number;
-  revenue_share_pct: number;
+  revenue_share_pct?: number;
+  contribution_pct?: number;
 }
 
 export interface TopProductsAnalytics {
-  sort_by: 'revenue' | 'units_sold';
-  period_total_revenue: number;
+  sort_by?: 'revenue' | 'units_sold';
+  period_total_revenue?: number;
+  total_revenue?: number | string;
   products: TopProductItem[];
 }
 
@@ -98,15 +107,18 @@ export interface HourlyFootfallAnalytics {
 
 export interface PaymentMethodItem {
   method: string;
-  label: string;
+  label?: string;
   count: number;
   total_amount: number;
-  percentage: number;
+  percentage?: number;
+  percentage_share?: number;
 }
 
 export interface PaymentMethodsAnalytics {
-  total_collected: number;
-  payment_methods: PaymentMethodItem[];
+  total_collected?: number;
+  total_amount?: number | string;
+  payment_methods?: PaymentMethodItem[];
+  methods?: PaymentMethodItem[];
 }
 
 export interface CriticalInventoryItem {

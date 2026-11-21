@@ -52,8 +52,8 @@ export function PaymentTenderBreakdown({ data, isLoading }: PaymentTenderBreakdo
     );
   }
 
-  const methods = data.payment_methods || [];
-  const total = Number(data.total_collected) || 0;
+  const methods = data.payment_methods || data.methods || [];
+  const total = Number(data.total_collected ?? data.total_amount) || 0;
 
   return (
     <Card padding="lg" radius="md" withBorder style={{ minHeight: 380 }}>
@@ -86,13 +86,14 @@ export function PaymentTenderBreakdown({ data, isLoading }: PaymentTenderBreakdo
           <Progress.Root size="xl" radius="sm">
             {methods.map((pm) => {
               const cfg = TENDER_CONFIG[pm.method] || { color: '#94a3b8' };
+              const pct = pm.percentage ?? pm.percentage_share ?? 0;
               return (
                 <Progress.Section
                   key={pm.method}
-                  value={pm.percentage}
+                  value={pct}
                   color={cfg.color}
                 >
-                  <Progress.Label>{pm.percentage >= 8 ? `${pm.percentage}%` : ''}</Progress.Label>
+                  <Progress.Label>{pct >= 8 ? `${pct}%` : ''}</Progress.Label>
                 </Progress.Section>
               );
             })}
@@ -138,7 +139,7 @@ export function PaymentTenderBreakdown({ data, isLoading }: PaymentTenderBreakdo
                         ₹{Number(pm.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </Text>
                       <Badge size="sm" variant="light" color={cfg.color} style={{ minWidth: 50, textAlign: 'center' }}>
-                        {pm.percentage}%
+                        {pm.percentage ?? pm.percentage_share ?? 0}%
                       </Badge>
                     </Group>
                   </Group>
