@@ -61,6 +61,14 @@ class MockMCPServer:
 
 
 class MCPAnalyticsToolsTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from django.core.management import call_command
+        from django.db import connection
+        if connection.vendor == 'sqlite':
+            call_command('migrate', verbosity=0)
+        super().setUpClass()
+
     def setUp(self):
         self.org = Organization.objects.create(
             name="Retail Analytics Org", subdomain="retail-analytics"
@@ -236,6 +244,45 @@ class MCPAnalyticsToolsTests(TestCase):
         mock_server = MockMCPServer()
         register_analytics_tools(mock_server)
         self.assertEqual(len(mock_server.registered_tools), 5)
+
+    def test_health_check_endpoint(self):
+        import asyncio
+        import json
+
+        import server
+        from starlette.requests import Request
+
+        scope = {"type": "http", "method": "GET", "headers": []}
+        req = Request(scope)
+        resp = asyncio.run(server.health_check(req))
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.body.decode())
+        self.assertEqual(body["status"], "healthy")
+        self.assertEqual(body["tools_count"], 12)
+
+    def test_portal_landing_page_endpoint(self):
+        import asyncio
+
+        import server
+        from starlette.requests import Request
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "headers": [
+                (b"host", b"mcp.139.59.36.22.sslip.io"),
+                (b"x-forwarded-proto", b"https"),
+            ],
+        }
+        req = Request(scope)
+        resp = asyncio.run(server.portal_page(req))
+        self.assertEqual(resp.status_code, 200)
+        html = resp.body.decode()
+        self.assertIn("StoreCraft MCP Service", html)
+        self.assertIn("https://mcp.139.59.36.22.sslip.io/sse", html)
+        self.assertIn("get_sales_kpis", html)
+        self.assertIn("search_products", html)
+
 
 
 if __name__ == "__main__":

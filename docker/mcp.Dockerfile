@@ -1,8 +1,8 @@
 FROM python:3.12-slim
 WORKDIR /app
 
-# Install system dependencies (for psycopg2)
-RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev gcc && rm -rf /var/lib/apt/lists/*
+# Install system dependencies (for psycopg2 and healthchecks)
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev gcc curl && rm -rf /var/lib/apt/lists/*
 
 # Install uv package manager
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
@@ -30,4 +30,8 @@ ENV MCP_HOST=0.0.0.0
 ENV MCP_PORT=8080
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://127.0.0.1:8080/health || exit 1
+
 CMD ["uv", "run", "python", "server.py"]

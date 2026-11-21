@@ -246,7 +246,7 @@ Under each service in Coolify, assign its public URL:
 - **`website` service (port 3000):** `https://store.<YOUR_VPS_IP>.sslip.io`
 - **`frontend` service (port 80):** `https://app.<YOUR_VPS_IP>.sslip.io`
 - **`backend` service (port 8000):** `https://api.<YOUR_VPS_IP>.sslip.io`
-- **`mcp` service (port 8080):** `https://mcp.<YOUR_VPS_IP>.sslip.io` (for Cursor, Claude Desktop, Antigravity)
+- **`mcp` service (port 8080):** `https://mcp.<YOUR_VPS_IP>.sslip.io` (renders the interactive web portal on `/`, JSON health check on `/health`, and SSE AI gateway on `/sse` for Cursor, Claude Desktop, Antigravity)
 
 *`sslip.io` is a free DNS resolution service that automatically routes subdomains directly to your VPS IP without manual DNS records.*
 
